@@ -30,7 +30,7 @@ use crate::{
     shell::{msg_if_fail, msg_warn},
     single_buffer_accessor::SingleBufferAccessor,
     source::{Source, SourceProvider},
-    source_access::SourceAccess,
+    source_access::{SourceAccess, SourceAccessEnum},
     timer::Timer,
     view::{HexData, TextData, View, ViewKind, ViewportScalar},
 };
@@ -50,7 +50,7 @@ pub struct App {
     /// The default perspective
     pub perspective: Perspective,
     pub dirty_region: Option<Region>,
-    pub data: SingleBufferAccessor,
+    pub data: SourceAccessEnum,
     pub edit_state: EditState,
     pub input: Input,
     pub interact_mode: InteractMode,
@@ -126,7 +126,7 @@ impl App {
             scissor_views: true,
             perspective: Perspective::default(),
             dirty_region: None,
-            data,
+            data: SourceAccessEnum::SingleBuffer(data),
             edit_state: EditState::default(),
             input: Input::default(),
             interact_mode: InteractMode::View,
@@ -171,7 +171,9 @@ impl App {
         match &mut self.source {
             Some(src) => match &mut src.provider {
                 SourceProvider::File(file) => {
-                    self.data = SingleBufferAccessor::from_vec(read_contents(&self.args, file)?);
+                    self.data = SourceAccessEnum::SingleBuffer(SingleBufferAccessor::from_vec(
+                        read_contents(&self.args, file)?,
+                    ));
                     self.dirty_region = None;
                 }
                 SourceProvider::Stdin(_) => {
