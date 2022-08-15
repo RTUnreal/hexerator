@@ -1,5 +1,6 @@
 use crate::{
-    args::Args, config::Config, single_buffer_accessor::SingleBufferAccessor, source::Source,
+    args::Args, config::Config, memmap_accessor::MemmapAccessor,
+    single_buffer_accessor::SingleBufferAccessor, source::Source,
 };
 
 pub type Range = std::ops::Range<usize>;
@@ -66,78 +67,91 @@ pub trait SourceAccess {
 
 pub enum SourceAccessEnum {
     SingleBuffer(SingleBufferAccessor),
+    Memmap(MemmapAccessor),
 }
 
 impl SourceAccess for SourceAccessEnum {
     fn get_range(&mut self, range: Range) -> Option<&[u8]> {
         match self {
             SourceAccessEnum::SingleBuffer(a) => a.get_range(range),
+            SourceAccessEnum::Memmap(a) => a.get_range(range),
         }
     }
 
     fn slice_range(&mut self, range: Range) -> &[u8] {
         match self {
             SourceAccessEnum::SingleBuffer(a) => a.slice_range(range),
+            SourceAccessEnum::Memmap(a) => a.slice_range(range),
         }
     }
 
     fn get_range_mut(&mut self, range: Range) -> Option<&mut [u8]> {
         match self {
             SourceAccessEnum::SingleBuffer(a) => a.get_range_mut(range),
+            SourceAccessEnum::Memmap(a) => a.get_range_mut(range),
         }
     }
 
     fn slice_range_inclusive(&mut self, range: RangeInclusive) -> &[u8] {
         match self {
             SourceAccessEnum::SingleBuffer(a) => a.slice_range_inclusive(range),
+            SourceAccessEnum::Memmap(a) => a.slice_range_inclusive(range),
         }
     }
 
     fn slice_range_inclusive_mut(&mut self, range: RangeInclusive) -> &mut [u8] {
         match self {
             SourceAccessEnum::SingleBuffer(a) => a.slice_range_inclusive_mut(range),
+            SourceAccessEnum::Memmap(a) => a.slice_range_inclusive_mut(range),
         }
     }
 
     fn slice_range_from_upper_bound(&mut self, range: RangeFrom, bound: usize) -> &[u8] {
         match self {
             SourceAccessEnum::SingleBuffer(a) => a.slice_range_from_upper_bound(range, bound),
+            SourceAccessEnum::Memmap(a) => a.slice_range_from_upper_bound(range, bound),
         }
     }
 
     fn get_range_from_upper_bound(&mut self, range: RangeFrom, bound: usize) -> Option<&[u8]> {
         match self {
             SourceAccessEnum::SingleBuffer(a) => a.get_range_from_upper_bound(range, bound),
+            SourceAccessEnum::Memmap(a) => a.get_range_from_upper_bound(range, bound),
         }
     }
 
     fn index_byte(&mut self, idx: usize) -> u8 {
         match self {
             SourceAccessEnum::SingleBuffer(a) => a.index_byte(idx),
+            SourceAccessEnum::Memmap(a) => a.index_byte(idx),
         }
     }
 
     fn index_byte_mut(&mut self, idx: usize) -> &mut u8 {
         match self {
             SourceAccessEnum::SingleBuffer(a) => a.index_byte_mut(idx),
+            SourceAccessEnum::Memmap(a) => a.index_byte_mut(idx),
         }
     }
 
     fn source_len(&self) -> usize {
         match self {
             SourceAccessEnum::SingleBuffer(a) => a.source_len(),
+            SourceAccessEnum::Memmap(a) => a.source_len(),
         }
     }
 
     fn make_empty_and_free(&mut self) {
         match self {
             SourceAccessEnum::SingleBuffer(a) => a.make_empty_and_free(),
+            SourceAccessEnum::Memmap(a) => a.make_empty_and_free(),
         }
     }
 
     fn downcast_to_single_buffer_vec(&mut self) -> Option<&mut Vec<u8>> {
         match self {
             SourceAccessEnum::SingleBuffer(a) => a.downcast_to_single_buffer_vec(),
+            SourceAccessEnum::Memmap(a) => a.downcast_to_single_buffer_vec(),
         }
     }
 
@@ -149,26 +163,61 @@ impl SourceAccess for SourceAccessEnum {
     ) -> bool {
         match self {
             SourceAccessEnum::SingleBuffer(a) => a.open_file_from_args(args, cfg, source),
+            SourceAccessEnum::Memmap(a) => a.open_file_from_args(args, cfg, source),
         }
     }
 
-    type Iter<'a> = impl Iterator<Item=u8>
-    where
-        Self: 'a;
+    type Iter<'a> = IterEnum<'a>;
 
-    fn iter(&self) -> Self::Iter<'_> {
+    fn iter(&self) -> IterEnum {
         match self {
-            SourceAccessEnum::SingleBuffer(s) => s.iter(),
+            SourceAccessEnum::SingleBuffer(s) => IterEnum::A(s.iter()),
+            SourceAccessEnum::Memmap(m) => IterEnum::B(m.iter()),
         }
     }
 
-    type FindIter<'h, 'n> = impl Iterator<Item=usize>
-    where
-        Self: 'h;
+    type FindIter<'h, 'n> = FindIterEnum<'h, 'n>;
 
-    fn find_iter<'h, 'n>(&'h self, needle: &'n [u8]) -> Self::FindIter<'h, 'n> {
+    fn find_iter<'h, 'n>(&'h self, needle: &'n [u8]) -> FindIterEnum<'h, 'n> {
         match self {
-            SourceAccessEnum::SingleBuffer(s) => s.find_iter(needle),
+            SourceAccessEnum::SingleBuffer(s) => FindIterEnum::A(s.find_iter(needle)),
+            SourceAccessEnum::Memmap(m) => FindIterEnum::B(m.find_iter(needle)),
+        }
+    }
+}
+
+type IterA<'a> = impl Iterator<Item = u8>;
+type IterB<'a> = impl Iterator<Item = u8>;
+pub enum IterEnum<'a> {
+    A(IterA<'a>),
+    B(IterB<'a>),
+}
+
+impl<'a> Iterator for IterEnum<'a> {
+    type Item = u8;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        match self {
+            IterEnum::A(a) => a.next(),
+            IterEnum::B(b) => b.next(),
+        }
+    }
+}
+
+type FindIterA<'h, 'n> = impl Iterator<Item = usize>;
+type FindIterB<'h, 'n> = impl Iterator<Item = usize>;
+pub enum FindIterEnum<'h, 'n> {
+    A(FindIterA<'h, 'n>),
+    B(FindIterB<'h, 'n>),
+}
+
+impl<'h, 'n> Iterator for FindIterEnum<'h, 'n> {
+    type Item = usize;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        match self {
+            FindIterEnum::A(a) => a.next(),
+            FindIterEnum::B(b) => b.next(),
         }
     }
 }

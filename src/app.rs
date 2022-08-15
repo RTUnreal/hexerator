@@ -16,6 +16,7 @@ use std::{
 
 use anyhow::{bail, Context};
 
+use memmap2::Mmap;
 use rfd::MessageButtons;
 use serde::{Deserialize, Serialize};
 use sfml::graphics::Font;
@@ -25,6 +26,7 @@ use crate::{
     config::Config,
     damage_region::DamageRegion,
     input::Input,
+    memmap_accessor::MemmapAccessor,
     metafile::Metafile,
     region::Region,
     shell::{msg_if_fail, msg_warn},
@@ -112,12 +114,13 @@ impl App {
         mut cfg: Config,
         font: &Font,
     ) -> anyhow::Result<Self> {
-        let data = Vec::new();
         let mut source = None;
         if args.load_recent && let Some(recent) = cfg.recent.most_recent() {
             args = recent.clone();
         }
-        let mut data = SingleBufferAccessor::from_vec(data);
+        let mut data = MemmapAccessor {
+            mmap: unsafe { Mmap::map(&File::open("/usr/bin/cat").unwrap()).unwrap() },
+        };
         data.open_file_from_args(&mut args, &mut cfg, &mut source);
         let layout = Layout::new();
         let mut views = default_views(&layout, window_height, font);
@@ -126,7 +129,7 @@ impl App {
             scissor_views: true,
             perspective: Perspective::default(),
             dirty_region: None,
-            data: SourceAccessEnum::SingleBuffer(data),
+            data: SourceAccessEnum::Memmap(data),
             edit_state: EditState::default(),
             input: Input::default(),
             interact_mode: InteractMode::View,

@@ -28,6 +28,7 @@ mod dec_conv;
 pub mod edit_buffer;
 mod hex_conv;
 mod input;
+mod memmap_accessor;
 mod metafile;
 mod region;
 mod shell;
