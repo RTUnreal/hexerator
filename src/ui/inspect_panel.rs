@@ -1,6 +1,7 @@
 use std::{array::TryFromSliceError, marker::PhantomData};
 
 use egui_sfml::egui::{self, Ui};
+use enum_dispatch::enum_dispatch;
 use sfml::window::clipboard;
 use thiserror::Error;
 
@@ -8,6 +9,7 @@ use crate::{
     app::{interact_mode::InteractMode, App},
     damage_region::DamageRegion,
     shell::{msg_if_fail, msg_warn},
+    source_access::SourceAccess,
     view::ViewportVec,
 };
 
@@ -29,7 +31,7 @@ impl Format {
 }
 
 pub struct InspectPanel {
-    input_thingies: [Box<dyn InputThingyTrait>; 11],
+    input_thingies: [InputThingyEnum; 11],
     /// True if an input thingy was changed by the user. Should update the others
     changed_one: bool,
     big_endian: bool,
@@ -50,17 +52,17 @@ impl Default for InspectPanel {
     fn default() -> Self {
         Self {
             input_thingies: [
-                Box::new(InputThingy::<i8>::default()),
-                Box::new(InputThingy::<u8>::default()),
-                Box::new(InputThingy::<i16>::default()),
-                Box::new(InputThingy::<u16>::default()),
-                Box::new(InputThingy::<i32>::default()),
-                Box::new(InputThingy::<u32>::default()),
-                Box::new(InputThingy::<i64>::default()),
-                Box::new(InputThingy::<u64>::default()),
-                Box::new(InputThingy::<f32>::default()),
-                Box::new(InputThingy::<f64>::default()),
-                Box::new(InputThingy::<Ascii>::default()),
+                InputThingy::<i8>::default().into(),
+                InputThingy::<u8>::default().into(),
+                InputThingy::<i16>::default().into(),
+                InputThingy::<u16>::default().into(),
+                InputThingy::<i32>::default().into(),
+                InputThingy::<u32>::default().into(),
+                InputThingy::<i64>::default().into(),
+                InputThingy::<u64>::default().into(),
+                InputThingy::<f32>::default().into(),
+                InputThingy::<f64>::default().into(),
+                InputThingy::<Ascii>::default().into(),
             ],
             changed_one: false,
             big_endian: false,
@@ -71,13 +73,29 @@ impl Default for InspectPanel {
     }
 }
 
+#[enum_dispatch]
+enum InputThingyEnum {
+    I8(InputThingy<i8>),
+    U8(InputThingy<u8>),
+    I16(InputThingy<i16>),
+    U16(InputThingy<u16>),
+    I32(InputThingy<i32>),
+    U32(InputThingy<u32>),
+    I64(InputThingy<i64>),
+    U64(InputThingy<u64>),
+    F32(InputThingy<f32>),
+    F64(InputThingy<f64>),
+    Ascii(InputThingy<Ascii>),
+}
+
+#[enum_dispatch(InputThingyEnum)]
 trait InputThingyTrait {
-    fn update(&mut self, data: &[u8], offset: usize, be: bool, format: Format);
+    fn update<A: SourceAccess>(&mut self, data: &mut A, offset: usize, be: bool, format: Format);
     fn label(&self) -> &'static str;
     fn buf_mut(&mut self) -> &mut String;
-    fn write_data(
+    fn write_data<A: SourceAccess>(
         &self,
-        data: &mut [u8],
+        data: &mut A,
         offset: usize,
         be: bool,
         format: Format,
@@ -85,7 +103,7 @@ trait InputThingyTrait {
 }
 
 impl<T: BytesManip> InputThingyTrait for InputThingy<T> {
-    fn update(&mut self, data: &[u8], offset: usize, be: bool, format: Format) {
+    fn update<A: SourceAccess>(&mut self, data: &mut A, offset: usize, be: bool, format: Format) {
         T::update_buf(&mut self.string, data, offset, be, format);
     }
     fn label(&self) -> &'static str {
@@ -96,9 +114,9 @@ impl<T: BytesManip> InputThingyTrait for InputThingy<T> {
         &mut self.string
     }
 
-    fn write_data(
+    fn write_data<A: SourceAccess>(
         &self,
-        data: &mut [u8],
+        data: &mut A,
         offset: usize,
         be: bool,
         format: Format,
@@ -118,8 +136,10 @@ enum FromBytesError {
 trait NumBytesManip: std::fmt::Display + Sized {
     type ToBytes: AsRef<[u8]>;
     fn label() -> &'static str;
-    fn from_le_bytes(bytes: &[u8]) -> Result<Self, FromBytesError>;
-    fn from_be_bytes(bytes: &[u8]) -> Result<Self, FromBytesError>;
+    fn from_le_bytes<A: SourceAccess>(bytes: &mut A, offset: usize)
+        -> Result<Self, FromBytesError>;
+    fn from_be_bytes<A: SourceAccess>(bytes: &mut A, offset: usize)
+        -> Result<Self, FromBytesError>;
     fn to_le_bytes(&self) -> Self::ToBytes;
     fn to_be_bytes(&self) -> Self::ToBytes;
     fn to_hex_string(&self) -> String;
@@ -136,15 +156,21 @@ macro_rules! num_bytes_manip_impl {
                 stringify!($t)
             }
 
-            fn from_le_bytes(bytes: &[u8]) -> Result<Self, FromBytesError> {
-                match bytes.get(..<$t>::BITS as usize / 8) {
+            fn from_le_bytes<A: SourceAccess>(
+                bytes: &mut A,
+                offset: usize,
+            ) -> Result<Self, FromBytesError> {
+                match bytes.get_range(offset..offset + (<$t>::BITS as usize / 8)) {
                     Some(slice) => Ok(Self::from_le_bytes(slice.try_into()?)),
                     None => Err(FromBytesError::SliceIndexError),
                 }
             }
 
-            fn from_be_bytes(bytes: &[u8]) -> Result<Self, FromBytesError> {
-                match bytes.get(..<$t>::BITS as usize / 8) {
+            fn from_be_bytes<A: SourceAccess>(
+                bytes: &mut A,
+                offset: usize,
+            ) -> Result<Self, FromBytesError> {
+                match bytes.get_range(offset..offset + (<$t>::BITS as usize / 8)) {
                     Some(slice) => Ok(Self::from_be_bytes(slice.try_into()?)),
                     None => Err(FromBytesError::SliceIndexError),
                 }
@@ -194,15 +220,21 @@ impl NumBytesManip for f32 {
         "f32"
     }
 
-    fn from_le_bytes(bytes: &[u8]) -> Result<Self, FromBytesError> {
-        match bytes.get(..32 / 8) {
+    fn from_le_bytes<A: SourceAccess>(
+        bytes: &mut A,
+        offset: usize,
+    ) -> Result<Self, FromBytesError> {
+        match bytes.get_range(offset..offset + (32 / 8)) {
             Some(slice) => Ok(Self::from_le_bytes(slice.try_into()?)),
             None => Err(FromBytesError::SliceIndexError),
         }
     }
 
-    fn from_be_bytes(bytes: &[u8]) -> Result<Self, FromBytesError> {
-        match bytes.get(..32 / 8) {
+    fn from_be_bytes<A: SourceAccess>(
+        bytes: &mut A,
+        offset: usize,
+    ) -> Result<Self, FromBytesError> {
+        match bytes.get_range(offset..offset + (32 / 8)) {
             Some(slice) => Ok(Self::from_be_bytes(slice.try_into()?)),
             None => Err(FromBytesError::SliceIndexError),
         }
@@ -241,15 +273,21 @@ impl NumBytesManip for f64 {
         "f64"
     }
 
-    fn from_le_bytes(bytes: &[u8]) -> Result<Self, FromBytesError> {
-        match bytes.get(..8) {
+    fn from_le_bytes<A: SourceAccess>(
+        bytes: &mut A,
+        offset: usize,
+    ) -> Result<Self, FromBytesError> {
+        match bytes.get_range(offset..offset + 8) {
             Some(slice) => Ok(Self::from_le_bytes(slice.try_into()?)),
             None => Err(FromBytesError::SliceIndexError),
         }
     }
 
-    fn from_be_bytes(bytes: &[u8]) -> Result<Self, FromBytesError> {
-        match bytes.get(..8) {
+    fn from_be_bytes<A: SourceAccess>(
+        bytes: &mut A,
+        offset: usize,
+    ) -> Result<Self, FromBytesError> {
+        match bytes.get_range(offset..offset + 8) {
             Some(slice) => Ok(Self::from_be_bytes(slice.try_into()?)),
             None => Err(FromBytesError::SliceIndexError),
         }
@@ -282,21 +320,25 @@ impl NumBytesManip for f64 {
 }
 
 impl<T: NumBytesManip> BytesManip for T {
-    fn update_buf(buf: &mut String, data: &[u8], offset: usize, be: bool, format: Format) {
-        if let Some(slice) = &data.get(offset..) {
-            let result = if be {
-                T::from_be_bytes(slice)
-            } else {
-                T::from_le_bytes(slice)
-            };
-            *buf = match result {
-                Ok(value) => match format {
-                    Format::Decimal => value.to_string(),
-                    Format::Hex => value.to_hex_string(),
-                    Format::Bin => value.to_bin_string(),
-                },
-                Err(e) => e.to_string(),
-            }
+    fn update_buf<A: SourceAccess>(
+        buf: &mut String,
+        data: &mut A,
+        offset: usize,
+        be: bool,
+        format: Format,
+    ) {
+        let result = if be {
+            T::from_be_bytes(data, offset)
+        } else {
+            T::from_le_bytes(data, offset)
+        };
+        *buf = match result {
+            Ok(value) => match format {
+                Format::Decimal => value.to_string(),
+                Format::Hex => value.to_hex_string(),
+                Format::Bin => value.to_bin_string(),
+            },
+            Err(e) => e.to_string(),
         }
     }
 
@@ -304,9 +346,9 @@ impl<T: NumBytesManip> BytesManip for T {
         <Self as NumBytesManip>::label()
     }
 
-    fn convert_and_write(
+    fn convert_and_write<A: SourceAccess>(
         buf: &str,
-        data: &mut [u8],
+        data: &mut A,
         offset: usize,
         be: bool,
         format: Format,
@@ -319,7 +361,7 @@ impl<T: NumBytesManip> BytesManip for T {
                     this.to_le_bytes()
                 };
                 let range = offset..offset + bytes.as_ref().len();
-                match data.get_mut(range.clone()) {
+                match data.get_range_mut(range.clone()) {
                     Some(slice) => {
                         slice.copy_from_slice(bytes.as_ref());
                         Some(DamageRegion::Range(range))
@@ -336,10 +378,16 @@ impl<T: NumBytesManip> BytesManip for T {
 }
 
 impl BytesManip for Ascii {
-    fn update_buf(buf: &mut String, data: &[u8], offset: usize, _be: bool, _format: Format) {
-        if let Some(slice) = &data.get(offset..) {
+    fn update_buf<A: SourceAccess>(
+        buf: &mut String,
+        data: &mut A,
+        offset: usize,
+        _be: bool,
+        _format: Format,
+    ) {
+        if let Some(slice) = &data.get_range_from_upper_bound(offset.., 100) {
             let valid_ascii_end = find_valid_ascii_end(slice);
-            match String::from_utf8(data[offset..offset + valid_ascii_end].to_vec()) {
+            match String::from_utf8(data.slice_range(offset..offset + valid_ascii_end).to_vec()) {
                 Ok(ascii) => *buf = ascii,
                 Err(e) => *buf = format!("[ascii error]: {}", e),
             }
@@ -350,16 +398,16 @@ impl BytesManip for Ascii {
         "ascii"
     }
 
-    fn convert_and_write(
+    fn convert_and_write<A: SourceAccess>(
         buf: &str,
-        data: &mut [u8],
+        data: &mut A,
         offset: usize,
         _be: bool,
         _format: Format,
     ) -> Option<DamageRegion> {
         let len = buf.len();
         let range = offset..offset + len;
-        match data.get_mut(range.clone()) {
+        match data.get_range_mut(range.clone()) {
             Some(slice) => {
                 slice.copy_from_slice(buf.as_bytes());
                 Some(DamageRegion::Range(range))
@@ -387,11 +435,17 @@ impl<T> Default for InputThingy<T> {
 }
 
 trait BytesManip {
-    fn update_buf(buf: &mut String, data: &[u8], offset: usize, be: bool, format: Format);
+    fn update_buf<A: SourceAccess>(
+        buf: &mut String,
+        data: &mut A,
+        offset: usize,
+        be: bool,
+        format: Format,
+    );
     fn label() -> &'static str;
-    fn convert_and_write(
+    fn convert_and_write<A: SourceAccess>(
         buf: &str,
-        data: &mut [u8],
+        data: &mut A,
         offset: usize,
         be: bool,
         format: Format,
@@ -424,7 +478,7 @@ pub fn ui(ui: &mut Ui, app: &mut App, mouse_pos: ViewportVec) {
     };
     ui.checkbox(&mut app.ui.inspect_panel.offset_relative, "Relative offset")
         .on_hover_text("Offset relative to --hard-seek");
-    if app.data.is_empty() {
+    if app.data.source_len() == 0 {
         return;
     }
     if offset != app.ui.inspect_panel.prev_frame_inspect_offset
@@ -433,7 +487,7 @@ pub fn ui(ui: &mut Ui, app: &mut App, mouse_pos: ViewportVec) {
     {
         for thingy in &mut app.ui.inspect_panel.input_thingies {
             thingy.update(
-                &app.data[..],
+                &mut app.data,
                 offset,
                 app.ui.inspect_panel.big_endian,
                 app.ui.inspect_panel.format,

@@ -2,6 +2,7 @@ use egui_sfml::egui::{text::LayoutJob, Align, DragValue, Stroke, TextFormat, Tex
 
 use crate::{
     app::{interact_mode::InteractMode, App},
+    source_access::SourceAccess,
     view::ViewportVec,
 };
 
@@ -26,7 +27,7 @@ pub fn ui(ui: &mut Ui, app: &mut App, mouse_pos: ViewportVec) {
         ui.add(DragValue::new(&mut app.perspective.region.begin));
         ui.label("columns");
         ui.add(DragValue::new(&mut app.perspective.cols));
-        let data_len = app.data.len();
+        let data_len = app.data.source_len();
         if data_len != 0 {
             if let Some(idx) = app.focused_view {
                 let offsets = app.named_views[idx].view.offsets(&app.perspective);

@@ -248,6 +248,18 @@ version = "0.18.0"
 source = "git+https://github.com/emilk/egui.git#48e7f219a3aaa43084d042590b2871c01415e642"
 
 [[package]]
+name = "enum_dispatch"
+version = "0.3.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0eb359f1476bf611266ac1f5355bc14aeca37b299d0ebccc038ee7058891c9cb"
+dependencies = [
+ "once_cell",
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
 name = "epaint"
 version = "0.18.1"
 source = "git+https://github.com/emilk/egui.git#48e7f219a3aaa43084d042590b2871c01415e642"
@@ -411,6 +423,7 @@ dependencies = [
  "egui-sfml",
  "egui_easy_mark_standalone",
  "either",
+ "enum_dispatch",
  "gamedebug_core",
  "glu-sys",
  "index_many",

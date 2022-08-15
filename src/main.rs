@@ -4,7 +4,9 @@
     let_else,
     try_blocks,
     array_chunks,
-    is_some_with
+    is_some_with,
+    type_alias_impl_trait,
+    generic_associated_types
 )]
 #![warn(
     trivial_casts,
@@ -29,8 +31,10 @@ mod input;
 mod metafile;
 mod region;
 mod shell;
+mod single_buffer_accessor;
 mod slice_ext;
 mod source;
+mod source_access;
 mod timer;
 mod ui;
 mod view;
@@ -59,6 +63,7 @@ use sfml::{
     window::{mouse, ContextSettings, Event, Key, Style, VideoMode},
 };
 use shell::{msg_if_fail, msg_warn};
+use source_access::SourceAccess;
 use ui::dialogs::SetCursorDialog;
 use view::{ViewportScalar, COMFY_MARGIN};
 
@@ -227,7 +232,7 @@ where
 
 fn update(app: &mut App) {
     app.try_read_stream();
-    if app.data.is_empty() {
+    if app.data.source_len() == 0 {
         return;
     }
     if app.interact_mode == InteractMode::View && !app.input.key_down(Key::LControl) {
@@ -376,7 +381,7 @@ fn handle_key_events(
     window: &mut RenderWindow,
     font: &Font,
 ) {
-    if app.data.is_empty() {
+    if app.data.source_len() == 0 {
         return;
     }
     match code {
@@ -405,7 +410,7 @@ fn handle_key_events(
                 if let Some(view_idx) = app.focused_view {
                     app.named_views[view_idx].view.undirty_edit_buffer()
                 }
-                if app.edit_state.cursor + app.perspective.cols < app.data.len() {
+                if app.edit_state.cursor + app.perspective.cols < app.data.source_len() {
                     app.edit_state.offset_cursor(app.perspective.cols);
                 }
             }
@@ -445,7 +450,8 @@ fn handle_key_events(
                 app.cursor_history_forward();
                 break 'block;
             }
-            if app.interact_mode == InteractMode::Edit && app.edit_state.cursor + 1 < app.data.len()
+            if app.interact_mode == InteractMode::Edit
+                && app.edit_state.cursor + 1 < app.data.source_len()
             {
                 let move_edit = (app.preferences.move_edit_cursor && !ctrl)
                     || (!app.preferences.move_edit_cursor && ctrl);

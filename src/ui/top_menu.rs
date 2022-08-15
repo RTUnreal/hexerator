@@ -7,6 +7,7 @@ use crate::{
     damage_region::DamageRegion,
     shell::{msg_if_fail, msg_info},
     source::SourceProvider,
+    source_access::SourceAccess,
 };
 
 use super::{
@@ -130,7 +131,7 @@ pub fn top_menu(ui: &mut egui::Ui, app: &mut App, window_height: i16, font: &Fon
             if ui.button("Random fill").clicked() {
                 if let Some(sel) = App::selection(&app.select_a, &app.select_b) {
                     let range = sel.begin..=sel.end;
-                    thread_rng().fill_bytes(&mut app.data[range.clone()]);
+                    thread_rng().fill_bytes(app.data.slice_range_inclusive_mut(range.clone()));
                     app.widen_dirty_region(DamageRegion::RangeInclusive(range));
                 }
                 ui.close_menu();
@@ -139,7 +140,7 @@ pub fn top_menu(ui: &mut egui::Ui, app: &mut App, window_height: i16, font: &Fon
                 if let Some(sel) = App::selection(&app.select_a, &app.select_b) {
                     use std::fmt::Write;
                     let mut s = String::new();
-                    for &byte in &app.data[sel.begin..=sel.end] {
+                    for &byte in app.data.slice_range_inclusive(sel.begin..=sel.end) {
                         write!(&mut s, "{:02x} ", byte).unwrap();
                     }
                     clipboard::set_string(s.trim_end());
@@ -148,7 +149,7 @@ pub fn top_menu(ui: &mut egui::Ui, app: &mut App, window_height: i16, font: &Fon
             }
             if ui.button("Save selection to file").clicked() {
                 if let Some(file_path) = rfd::FileDialog::new().save_file() && let Some(sel) = App::selection(&app.select_a, &app.select_b) {
-                    let result = std::fs::write(file_path, &app.data[sel.begin..=sel.end]);
+                    let result = std::fs::write(file_path, &app.data.slice_range_inclusive(sel.begin..=sel.end));
                     msg_if_fail(result, "Failed to save selection to file");
                 }
                 ui.close_menu();
@@ -229,7 +230,7 @@ pub fn top_menu(ui: &mut egui::Ui, app: &mut App, window_height: i16, font: &Fon
         });
         ui.menu_button("Analysis", |ui| {
             if ui.button("Determine data mime type under cursor").clicked() {
-                let format = tree_magic_mini::from_u8(&app.data[app.edit_state.cursor..]);
+                let format = tree_magic_mini::from_u8(app.data.slice_range_from_upper_bound(app.edit_state.cursor.., 100));
                 msg_info(format);
                 ui.close_menu();
             }

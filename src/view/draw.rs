@@ -7,19 +7,22 @@ use sfml::{
 };
 
 use crate::{
-    app::{presentation::Presentation, App},
+    app::{perspective::Perspective, presentation::Presentation, App},
     color::invert_color,
     dec_conv, hex_conv,
     region::Region,
+    source_access::SourceAccess,
     ui::Ui,
     view::ViewKind,
 };
 
 use super::View;
 
-pub fn draw_view(
+pub fn draw_view<A: SourceAccess>(
     view: &View,
-    app: &App,
+    data: &mut A,
+    perspective: &Perspective,
+    presentation: &Presentation,
     vertex_buffer: &mut Vec<Vertex>,
     mut drawfn: impl FnMut(&mut Vec<Vertex>, f32, f32, &[u8], usize, Color),
 ) {
@@ -27,15 +30,15 @@ pub fn draw_view(
     if view.scroll_offset.pix_xoff <= -view.viewport_rect.w {
         return;
     }
-    let mut idx = app.perspective.region.begin;
+    let mut idx = perspective.region.begin;
     let start_row: usize = view.scroll_offset.row;
-    idx += start_row * (app.perspective.cols * usize::from(view.bytes_per_block));
+    idx += start_row * (perspective.cols * usize::from(view.bytes_per_block));
     #[expect(
         clippy::cast_sign_loss,
         reason = "rows() returning negative is a bug, should be positive."
     )]
     let orig = start_row..=start_row + view.rows() as usize;
-    let (row_range, pix_yoff) = if app.perspective.flip_row_order {
+    let (row_range, pix_yoff) = if perspective.flip_row_order {
         (Either::Left(orig.rev()), -view.scroll_offset.pix_yoff)
     } else {
         (Either::Right(orig), view.scroll_offset.pix_yoff)
@@ -45,30 +48,29 @@ pub fn draw_view(
         let viewport_y = (i64::from(view.viewport_rect.y) + y as i64)
             - ((view.scroll_offset.row as i64 * i64::from(view.row_h)) + i64::from(pix_yoff));
         let start_col = view.scroll_offset.col;
-        if start_col >= app.perspective.cols {
+        if start_col >= perspective.cols {
             break;
         }
         idx += start_col * usize::from(view.bytes_per_block);
-        for col in start_col..app.perspective.cols {
+        for col in start_col..perspective.cols {
             let x = col * usize::from(view.col_w);
             let viewport_x = (i64::from(view.viewport_rect.x) + x as i64)
                 - ((view.scroll_offset.col as i64 * i64::from(view.col_w))
                     + i64::from(view.scroll_offset.pix_xoff));
             if viewport_x > i64::from(view.viewport_rect.x + view.viewport_rect.w) {
-                idx += (app.perspective.cols - col) * usize::from(view.bytes_per_block);
+                idx += (perspective.cols - col) * usize::from(view.bytes_per_block);
                 break;
             }
             if viewport_y > i64::from(view.viewport_rect.y + view.viewport_rect.h)
-                && !app.perspective.flip_row_order
+                && !perspective.flip_row_order
             {
                 break 'rows;
             }
-            match app.data.get(idx..idx + view.bytes_per_block as usize) {
+            match data.get_range(idx..idx + view.bytes_per_block as usize) {
                 Some(data) => {
-                    let c = app
-                        .presentation
+                    let c = presentation
                         .color_method
-                        .byte_color(data[0], app.presentation.invert_color);
+                        .byte_color(data[0], presentation.invert_color);
                     #[expect(
                         clippy::cast_precision_loss,
                         reason = "At this point, the viewport coordinates should be small enough to fit in viewport"
@@ -99,7 +101,7 @@ pub fn draw_view(
                     idx += usize::from(view.bytes_per_block);
                 }
                 None => {
-                    if !app.perspective.flip_row_order {
+                    if !perspective.flip_row_order {
                         break 'rows;
                     }
                 }
@@ -310,9 +312,11 @@ impl View {
             ViewKind::Hex(hex) => {
                 draw_view(
                     self,
-                    app,
+                    &mut app.data,
+                    &app.perspective,
+                    &app.presentation,
                     vertex_buffer,
-                    |vertex_buffer, x, y, data, idx, c| {
+                    |vertex_buffer, x, y, data: &[u8], idx, c| {
                         if selected_or_find_result_contains(
                             App::selection(&app.select_a, &app.select_b),
                             idx,
@@ -353,7 +357,7 @@ impl View {
                                 y,
                                 vertex_buffer,
                                 app.focused_view == Some(key),
-                                app.cursor_flash_timer(),
+                                App::cursor_flash_timer(&app.flash_cursor_timer),
                                 &app.presentation,
                                 hex.font_size,
                             );
@@ -365,7 +369,9 @@ impl View {
             ViewKind::Dec(dec) => {
                 draw_view(
                     self,
-                    app,
+                    &mut app.data,
+                    &app.perspective,
+                    &app.presentation,
                     vertex_buffer,
                     |vertex_buffer, x, y, data, idx, c| {
                         if selected_or_find_result_contains(
@@ -408,7 +414,7 @@ impl View {
                                 y,
                                 vertex_buffer,
                                 app.focused_view == Some(key),
-                                app.cursor_flash_timer(),
+                                App::cursor_flash_timer(&app.flash_cursor_timer),
                                 &app.presentation,
                                 dec.font_size,
                             );
@@ -420,7 +426,9 @@ impl View {
             ViewKind::Text(text) => {
                 draw_view(
                     self,
-                    app,
+                    &mut app.data,
+                    &app.perspective,
+                    &app.presentation,
                     vertex_buffer,
                     |vertex_buffer, x, y, data, idx, c| {
                         if selected_or_find_result_contains(
@@ -462,7 +470,7 @@ impl View {
                                 y,
                                 vertex_buffer,
                                 app.focused_view == Some(key),
-                                app.cursor_flash_timer(),
+                                App::cursor_flash_timer(&app.flash_cursor_timer),
                                 &app.presentation,
                                 text.font_size,
                             );
@@ -474,7 +482,9 @@ impl View {
             ViewKind::Block => {
                 draw_view(
                     self,
-                    app,
+                    &mut app.data,
+                    &app.perspective,
+                    &app.presentation,
                     vertex_buffer,
                     |vertex_buffer, x, y, _byte, idx, mut c| {
                         if selected_or_find_result_contains(
@@ -498,7 +508,7 @@ impl View {
                                 y,
                                 vertex_buffer,
                                 app.focused_view == Some(key),
-                                app.cursor_flash_timer(),
+                                App::cursor_flash_timer(&app.flash_cursor_timer),
                                 &app.presentation,
                                 self,
                             );

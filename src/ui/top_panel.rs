@@ -6,6 +6,7 @@ use crate::{
     app::App,
     color::{self, ColorMethod},
     shell::{msg_fail, msg_if_fail, msg_warn},
+    source_access::SourceAccess,
     view::ViewportScalar,
 };
 
@@ -85,7 +86,7 @@ pub fn ui(ui: &mut Ui, app: &mut App, window_height: ViewportScalar, font: &Font
             ui.color_edit_button_rgb(&mut app.presentation.bg_color);
             ui.label("Bg color");
             if let ColorMethod::Custom(arr) = &mut app.presentation.color_method {
-                let col = &mut arr[app.data[app.edit_state.cursor] as usize];
+                let col = &mut arr[app.data.index_byte(app.edit_state.cursor) as usize];
                 ui.color_edit_button_srgb(col);
                 ui.label("Byte color");
                 if ui
@@ -139,7 +140,7 @@ pub fn ui(ui: &mut Ui, app: &mut App, window_height: ViewportScalar, font: &Font
                         for y in 0..size.y {
                             for x in 0..size.x {
                                 let color = unsafe { img.pixel_at(x, y) };
-                                let byte = app.data[sel.begin + i];
+                                let byte = app.data.index_byte(sel.begin + i);
                                 arr[byte as usize] = [color.r, color.g, color.b];
                                 i += 1;
                             }

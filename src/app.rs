@@ -28,7 +28,9 @@ use crate::{
     metafile::Metafile,
     region::Region,
     shell::{msg_if_fail, msg_warn},
-    source::{Source, SourceAttributes, SourcePermissions, SourceProvider, SourceState},
+    single_buffer_accessor::SingleBufferAccessor,
+    source::{Source, SourceProvider},
+    source_access::SourceAccess,
     timer::Timer,
     view::{HexData, TextData, View, ViewKind, ViewportScalar},
 };
@@ -48,7 +50,7 @@ pub struct App {
     /// The default perspective
     pub perspective: Perspective,
     pub dirty_region: Option<Region>,
-    pub data: Vec<u8>,
+    pub data: SingleBufferAccessor,
     pub edit_state: EditState,
     pub input: Input,
     pub interact_mode: InteractMode,
@@ -66,7 +68,7 @@ pub struct App {
     pub source: Option<Source>,
     pub col_change_lock_x: bool,
     pub col_change_lock_y: bool,
-    flash_cursor_timer: Timer,
+    pub flash_cursor_timer: Timer,
     pub just_reloaded: bool,
     pub layout: Layout,
     pub regions: Vec<NamedRegion>,
@@ -110,12 +112,13 @@ impl App {
         mut cfg: Config,
         font: &Font,
     ) -> anyhow::Result<Self> {
-        let mut data = Vec::new();
+        let data = Vec::new();
         let mut source = None;
         if args.load_recent && let Some(recent) = cfg.recent.most_recent() {
             args = recent.clone();
         }
-        load_file_from_args(&mut args, &mut cfg, &mut source, &mut data);
+        let mut data = SingleBufferAccessor::from_vec(data);
+        data.open_file_from_args(&mut args, &mut cfg, &mut source);
         let layout = Layout::new();
         let mut views = default_views(&layout, window_height, font);
         views[0].view.go_home();
@@ -168,7 +171,7 @@ impl App {
         match &mut self.source {
             Some(src) => match &mut src.provider {
                 SourceProvider::File(file) => {
-                    self.data = read_contents(&self.args, file)?;
+                    self.data = SingleBufferAccessor::from_vec(read_contents(&self.args, file)?);
                     self.dirty_region = None;
                 }
                 SourceProvider::Stdin(_) => {
@@ -203,9 +206,15 @@ impl App {
                 // TODO: We're assuming here that end of the region is the same position as the last dirty byte
                 // Make sure to enforce this invariant.
                 // Add 1 to the end to write the dirty region even if it's 1 byte
-                &self.data[region.begin..region.end + 1]
+                self.data.slice_range(region.begin..region.end + 1)
             }
-            None => &self.data,
+            None => {
+                // TODO: We're not doing anything here.
+                // But maybe saving the whole file could be an option here.
+                // For example, if it's missing from disk.
+                // Might not be worth implementing though.
+                return Ok(());
+            }
         };
         file.write_all(data_to_write)?;
         self.dirty_region = None;
@@ -338,7 +347,7 @@ impl App {
         self.perspective = Perspective {
             region: Region {
                 begin: 0,
-                end: self.data.len().saturating_sub(1),
+                end: self.data.source_len().saturating_sub(1),
             },
             cols: 48,
             flip_row_order: false,
@@ -348,7 +357,7 @@ impl App {
 
     pub fn close_file(&mut self) {
         // We potentially had large data, free it instead of clearing the Vec
-        self.data = Vec::new();
+        self.data.make_empty_and_free();
         msg_if_fail(self.save_meta(), "Failed to save .hexerator_meta");
         self.args.file = None;
         self.source = None;
@@ -379,7 +388,7 @@ impl App {
         self.flash_cursor_timer = Timer::set(Duration::from_millis(1500));
     }
     /// If the cursor should be flashing, returns a timer value that can be used to color cursor
-    pub fn cursor_flash_timer(&self) -> Option<u32> {
+    pub fn cursor_flash_timer(app_flash_cursor_timer: &Timer) -> Option<u32> {
         #[expect(
             clippy::cast_possible_truncation,
             reason = "
@@ -389,7 +398,7 @@ impl App {
         only a few seconds at most.
         "
         )]
-        self.flash_cursor_timer
+        app_flash_cursor_timer
             .overtime()
             .map(|dur| dur.as_millis() as u32)
     }
@@ -404,7 +413,7 @@ impl App {
         let view_byte_offset = view.offsets(&self.perspective).byte;
         let bytes_per_page = view.bytes_per_page(&self.perspective);
         // Don't read past what we need for our current view offset
-        if view_byte_offset + bytes_per_page < self.data.len() {
+        if view_byte_offset + bytes_per_page < self.data.source_len() {
             return;
         }
         if src.state.stream_end {
@@ -416,8 +425,16 @@ impl App {
                     if buf.is_empty() {
                         src.state.stream_end = true;
                     } else {
-                        self.data.extend_from_slice(&buf[..]);
-                        self.perspective.region.end = self.data.len() - 1;
+                        match self.data.downcast_to_single_buffer_vec() {
+                            Some(data) => {
+                                data.extend_from_slice(&buf[..]);
+                                self.perspective.region.end = data.len() - 1;
+                            }
+                            None => {
+                                msg_warn("Current source accessor doesn't support streaming. Terminating.");
+                                panic!("Streaming not supported for this source accessor");
+                            }
+                        }
                     }
                 }
                 Err(e) => match e {
@@ -495,7 +512,10 @@ impl App {
         window_height: ViewportScalar,
         font: &Font,
     ) -> anyhow::Result<()> {
-        if load_file_from_args(&mut args, &mut self.cfg, &mut self.source, &mut self.data) {
+        if self
+            .data
+            .open_file_from_args(&mut args, &mut self.cfg, &mut self.source)
+        {
             self.args = args;
         }
         self.new_file_readjust(window_height, font);
@@ -572,74 +592,7 @@ fn default_views(layout: &Layout, window_height: ViewportScalar, font: &Font) ->
     ]
 }
 
-/// Returns if the file was actually loaded.
-fn load_file_from_args(
-    args: &mut Args,
-    cfg: &mut Config,
-    source: &mut Option<Source>,
-    data: &mut Vec<u8>,
-) -> bool {
-    if let Some(file_arg) = &args.file {
-        if file_arg.as_os_str() == "-" {
-            *source = Some(Source {
-                provider: SourceProvider::Stdin(std::io::stdin()),
-                attr: SourceAttributes {
-                    seekable: false,
-                    stream: true,
-                    permissions: SourcePermissions {
-                        read: true,
-                        write: false,
-                    },
-                },
-                state: SourceState::default(),
-            });
-            true
-        } else {
-            let result: Result<(), anyhow::Error> = try {
-                let mut file = open_file(file_arg, args.read_only)?;
-                data.clear();
-                if let Some(path) = &mut args.file {
-                    match path.canonicalize() {
-                        Ok(canon) => *path = canon,
-                        Err(e) => msg_warn(&format!(
-                            "Failed to canonicalize path {}: {}\n\
-                             Recent use list might not be able to load it back.",
-                            path.display(),
-                            e
-                        )),
-                    }
-                }
-                cfg.recent.use_(args.clone());
-                if !args.stream {
-                    *data = read_contents(&*args, &mut file)?;
-                }
-                *source = Some(Source {
-                    provider: SourceProvider::File(file),
-                    attr: SourceAttributes {
-                        seekable: true,
-                        stream: args.stream,
-                        permissions: SourcePermissions {
-                            read: true,
-                            write: !args.read_only,
-                        },
-                    },
-                    state: SourceState::default(),
-                });
-            };
-            match result {
-                Ok(()) => true,
-                Err(e) => {
-                    msg_warn(&format!("Failed to open file: {}", e));
-                    false
-                }
-            }
-        }
-    } else {
-        false
-    }
-}
-
-fn open_file(path: &Path, read_only: bool) -> Result<File, anyhow::Error> {
+pub fn open_file(path: &Path, read_only: bool) -> Result<File, anyhow::Error> {
     OpenOptions::new()
         .read(true)
         .write(!read_only)
@@ -647,7 +600,7 @@ fn open_file(path: &Path, read_only: bool) -> Result<File, anyhow::Error> {
         .context("Failed to open file")
 }
 
-fn read_contents(args: &Args, file: &mut File) -> anyhow::Result<Vec<u8>> {
+pub fn read_contents(args: &Args, file: &mut File) -> anyhow::Result<Vec<u8>> {
     let seek = args.hard_seek.unwrap_or(0);
     file.seek(SeekFrom::Start(seek as u64))?;
     let mut data = Vec::new();

@@ -5,6 +5,7 @@ use crate::{
     damage_region::DamageRegion,
     shell::{msg_fail, msg_warn},
     slice_ext::SliceExt,
+    source_access::SourceAccess,
 };
 
 use super::Dialog;
@@ -93,7 +94,9 @@ impl Dialog for PatternFillDialog {
             match values {
                 Ok(values) => {
                     let range = sel.begin..=sel.end;
-                    app.data[range.clone()].pattern_fill(&values);
+                    app.data
+                        .slice_range_inclusive_mut(range.clone())
+                        .pattern_fill(&values);
                     app.widen_dirty_region(DamageRegion::RangeInclusive(range));
                     false
                 }

@@ -7,6 +7,7 @@ use crate::{
     edit_buffer::EditBuffer,
     hex_conv::merge_hex_halves,
     shell::{msg_if_fail, msg_warn},
+    source_access::SourceAccess,
 };
 
 mod draw;
@@ -295,7 +296,7 @@ impl View {
             match &mut self.kind {
                 ViewKind::Hex(hex) => {
                     if !hex.edit_buf.dirty {
-                        let s = format!("{:02X}", app.data[app.edit_state.cursor]);
+                        let s = format!("{:02X}", app.data.index_byte(app.edit_state.cursor));
                         hex.edit_buf.update_from_string(&s);
                     }
                     if hex.edit_buf.enter_byte(unicode.to_ascii_uppercase() as u8)
@@ -306,7 +307,7 @@ impl View {
                 }
                 ViewKind::Dec(dec) => {
                     if !dec.edit_buf.dirty {
-                        let s = format!("{:03}", app.data[app.edit_state.cursor]);
+                        let s = format!("{:03}", app.data.index_byte(app.edit_state.cursor));
                         dec.edit_buf.update_from_string(&s);
                     }
                     if dec.edit_buf.enter_byte(unicode.to_ascii_uppercase() as u8)
@@ -340,7 +341,7 @@ impl View {
     pub fn finish_editing(&mut self, app: &mut App) {
         match &mut self.kind {
             ViewKind::Hex(hex) => {
-                app.data[app.edit_state.cursor] =
+                *app.data.index_byte_mut(app.edit_state.cursor) =
                     merge_hex_halves(hex.edit_buf.buf[0], hex.edit_buf.buf[1]);
                 app.widen_dirty_region(DamageRegion::Single(app.edit_state.cursor));
             }
@@ -349,19 +350,19 @@ impl View {
                     std::str::from_utf8(&dec.edit_buf.buf).expect("Invalid utf-8 in edit buffer");
                 match s.parse() {
                     Ok(num) => {
-                        app.data[app.edit_state.cursor] = num;
+                        *app.data.index_byte_mut(app.edit_state.cursor) = num;
                         app.widen_dirty_region(DamageRegion::Single(app.edit_state.cursor));
                     }
                     Err(e) => msg_warn(&format!("Invalid value: {}", e)),
                 }
             }
             ViewKind::Text(text) => {
-                app.data[app.edit_state.cursor] = text.edit_buf.buf[0];
+                *app.data.index_byte_mut(app.edit_state.cursor) = text.edit_buf.buf[0];
                 app.widen_dirty_region(DamageRegion::Single(app.edit_state.cursor));
             }
             ViewKind::Block => {}
         }
-        if app.edit_state.cursor + 1 < app.data.len() && !app.preferences.sticky_edit {
+        if app.edit_state.cursor + 1 < app.data.source_len() && !app.preferences.sticky_edit {
             app.edit_state.step_cursor_forward()
         }
         self.reset_edit_buf();
