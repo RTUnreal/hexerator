@@ -115,9 +115,9 @@ impl FindDialog {
                                 ui.label(app.data.get(off).map(|off| off.to_string()).as_deref().unwrap_or("??"));
                             });
                             row.col(|ui| {
-                                match find_most_specific_region_for_offset(&app.meta_state.meta.low.regions, off) {
+                                match find_most_specific_region_for_offset(&app.hex.meta_state.meta.low.regions, off) {
                                     Some(key) => {
-                                        let reg = &app.meta_state.meta.low.regions[key];
+                                        let reg = &app.hex.meta_state.meta.low.regions[key];
                                         let ctx_menu = |ui: &mut egui::Ui| {
                                             region_context_menu!(ui, app, reg, action);
                                             ui.separator();
@@ -137,7 +137,7 @@ impl FindDialog {
                                 }
                             });
                             row.col(|ui| {
-                                match Meta::bookmark_for_offset(&app.meta_state.meta.bookmarks, off) {
+                                match Meta::bookmark_for_offset(&app.hex.meta_state.meta.bookmarks, off) {
                                     Some((bm_idx, bm)) => {
                                         if ui.link(&bm.label).on_hover_text(&bm.desc).clicked() {
                                             gui.bookmarks_window.open.set(true);
@@ -145,8 +145,8 @@ impl FindDialog {
                                         }
                                     },
                                     None => { if ui.button("✚").on_hover_text("Add new bookmark").clicked() {
-                                        let idx = app.meta_state.meta.bookmarks.len();
-                                        app.meta_state.meta.bookmarks.push(Bookmark {
+                                        let idx = app.hex.meta_state.meta.bookmarks.len();
+                                        app.hex.meta_state.meta.bookmarks.push(Bookmark {
                                             offset: off,
                                             label: "New bookmark".into(),
                                             desc: String::new(),
@@ -171,11 +171,11 @@ impl FindDialog {
                     Action::Goto(off) => {
                         app.center_view_on_offset(off);
                         app.edit_state.set_cursor(off);
-                        app.hex_ui.flash_cursor();
+                        app.hex.ui.flash_cursor();
                     }
                     Action::None => {},
                     Action::RemoveRegionFromResults(key) => {
-                        let reg = &app.meta_state.meta.low.regions[key];
+                        let reg = &app.hex.meta_state.meta.low.regions[key];
                         gui.find_dialog.results_vec.retain(|&idx| !reg.region.contains(idx));
                         gui.find_dialog.results_set.retain(|&idx| !reg.region.contains(idx));
                     },

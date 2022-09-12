@@ -97,7 +97,7 @@ impl FindMemoryPointersWindow {
             Action::Goto(off) => {
                 app.center_view_on_offset(off);
                 app.edit_state.set_cursor(off);
-                app.hex_ui.flash_cursor();
+                app.hex.ui.flash_cursor();
             }
             Action::None => {}
         }

@@ -17,12 +17,13 @@ pub struct RegionsWindow {
 macro_rules! region_context_menu {
     ($ui:expr, $app:expr, $reg:expr, $action:expr) => {{
         $ui.menu_button("Containing layouts", |ui| {
-            for (key, layout) in $app.meta_state.meta.layouts.iter() {
-                if let Some(v) = layout.view_containing_region(&$reg.region, &$app.meta_state.meta)
+            for (key, layout) in $app.hex.meta_state.meta.layouts.iter() {
+                if let Some(v) =
+                    layout.view_containing_region(&$reg.region, &$app.hex.meta_state.meta)
                 {
                     if ui.button(&layout.name).clicked() {
-                        $app.hex_ui.current_layout = key;
-                        $app.hex_ui.focused_view = Some(v);
+                        $app.hex.ui.current_layout = key;
+                        $app.hex.ui.focused_view = Some(v);
                         $action = Action::Goto($reg.region.begin);
                         ui.close_menu();
                     }
@@ -30,8 +31,8 @@ macro_rules! region_context_menu {
             }
         });
         if $ui.button("Select").clicked() {
-            $app.hex_ui.select_a = Some($reg.region.begin);
-            $app.hex_ui.select_b = Some($reg.region.end);
+            $app.hex.ui.select_a = Some($reg.region.begin);
+            $app.hex.ui.select_b = Some($reg.region.end);
             $ui.close_menu();
         }
     }};
@@ -40,12 +41,12 @@ macro_rules! region_context_menu {
 impl RegionsWindow {
     pub fn ui(ui: &mut Ui, gui: &mut crate::gui::Gui, app: &mut App) {
         let button = egui::Button::new("Add selection as region");
-        match app.hex_ui.selection() {
+        match app.hex.ui.selection() {
             Some(sel) => {
                 if ui.add(button).clicked() {
                     super::ops::add_region_from_selection(
                         sel,
-                        &mut app.meta_state,
+                        &mut app.hex.meta_state,
                         &mut gui.regions_window,
                     );
                 }
@@ -77,12 +78,12 @@ impl RegionsWindow {
                 });
             })
             .body(|mut body| {
-                let mut keys: Vec<RegionKey> = app.meta_state.meta.low.regions.keys().collect();
+                let mut keys: Vec<RegionKey> = app.hex.meta_state.meta.low.regions.keys().collect();
                 let mut action = Action::None;
-                keys.sort_by_key(|k| app.meta_state.meta.low.regions[*k].region.begin);
+                keys.sort_by_key(|k| app.hex.meta_state.meta.low.regions[*k].region.begin);
                 for k in keys {
                     body.row(20.0, |mut row| {
-                        let reg = &app.meta_state.meta.low.regions[k];
+                        let reg = &app.hex.meta_state.meta.low.regions[k];
                         row.col(|ui| {
                             let ctx_menu =
                                 |ui: &mut egui::Ui| region_context_menu!(ui, app, reg, action);
@@ -118,13 +119,13 @@ impl RegionsWindow {
                     Action::Goto(off) => {
                         app.center_view_on_offset(off);
                         app.edit_state.set_cursor(off);
-                        app.hex_ui.flash_cursor();
+                        app.hex.ui.flash_cursor();
                     }
                 }
             });
         ui.separator();
         if let &Some(key) = &gui.regions_window.selected_key {
-            let reg = &mut app.meta_state.meta.low.regions[key];
+            let reg = &mut app.hex.meta_state.meta.low.regions[key];
             ui.horizontal(|ui| {
                 if gui.regions_window.rename_active {
                     if ui.text_edit_singleline(&mut reg.name).lost_focus() {
@@ -144,17 +145,17 @@ impl RegionsWindow {
                 ui.add(egui::DragValue::new(&mut reg.region.end));
             });
             if gui.regions_window.select_active {
-                app.hex_ui.select_a = Some(reg.region.begin);
-                app.hex_ui.select_b = Some(reg.region.end);
+                app.hex.ui.select_a = Some(reg.region.begin);
+                app.hex.ui.select_b = Some(reg.region.end);
             }
             if ui
                 .checkbox(&mut gui.regions_window.select_active, "Select")
                 .clicked()
             {
-                app.hex_ui.select_a = None;
-                app.hex_ui.select_b = None;
+                app.hex.ui.select_a = None;
+                app.hex.ui.select_b = None;
             }
-            if let Some(sel) = app.hex_ui.selection() {
+            if let Some(sel) = app.hex.ui.selection() {
                 if ui.button("Set to selection").clicked() {
                     reg.region = sel;
                 }
@@ -164,7 +165,7 @@ impl RegionsWindow {
             ui.label("Description");
             ui.text_edit_multiline(&mut reg.desc);
             if ui.button("Delete").clicked() {
-                app.meta_state.meta.low.regions.remove(key);
+                app.hex.meta_state.meta.low.regions.remove(key);
                 gui.regions_window.selected_key = None;
             }
         }

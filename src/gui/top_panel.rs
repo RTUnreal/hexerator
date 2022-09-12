@@ -15,26 +15,26 @@ use {
 pub fn ui(ui: &mut Ui, gui: &mut Gui, app: &mut App, font: &Font) {
     top_menu(ui, gui, app, font);
     ui.horizontal(|ui| {
-        if app.hex_ui.select_a.is_some() || app.hex_ui.select_b.is_some() {
+        if app.hex.ui.select_a.is_some() || app.hex.ui.select_b.is_some() {
             ui.label("Selection");
         }
-        if let Some(a) = app.hex_ui.select_a {
+        if let Some(a) = app.hex.ui.select_a {
             ui.label(format!("a: {}", a));
         }
-        if let Some(b) = app.hex_ui.select_b {
+        if let Some(b) = app.hex.ui.select_b {
             ui.label(format!("b: {}", b));
         }
-        if let Some(sel) = app.hex_ui.selection() && let Some(view_key) = app.hex_ui.focused_view {
-            let view = &app.meta_state.meta.views[view_key].view;
-            let (rows, rem) = app.meta_state.meta.low.perspectives[view.perspective].region_row_span(sel);
+        if let Some(sel) = app.hex.ui.selection() && let Some(view_key) = app.hex.ui.focused_view {
+            let view = &app.hex.meta_state.meta.views[view_key].view;
+            let (rows, rem) = app.hex.meta_state.meta.low.perspectives[view.perspective].region_row_span(sel);
             ui.label(format!(
                 "{rows} rows * {} cols + {rem} = {}",
-                app.meta_state.meta.low.perspectives[view.perspective].cols,
+                app.hex.meta_state.meta.low.perspectives[view.perspective].cols,
                 sel.len()
             ));
         }
-        if let Some(view_key) = app.hex_ui.focused_view {
-            let presentation = &mut app.meta_state.meta.views[view_key].view.presentation;
+        if let Some(view_key) = app.hex.ui.focused_view {
+            let presentation = &mut app.hex.meta_state.meta.views[view_key].view.presentation;
             ui.with_layout(Layout::right_to_left(egui::Align::Center), |ui| {
                 ui.checkbox(&mut presentation.invert_color, "invert");
                 ComboBox::new("color_combo", "Color")
@@ -122,7 +122,7 @@ pub fn ui(ui: &mut Ui, gui: &mut Gui, app: &mut App, font: &Font) {
                     ";
                     if ui
                         .add_enabled(
-                            app.hex_ui.selection().is_some(),
+                            app.hex.ui.selection().is_some(),
                             egui::Button::new("img"),
                         )
                         .on_hover_text(tooltip)
@@ -137,7 +137,7 @@ pub fn ui(ui: &mut Ui, gui: &mut Gui, app: &mut App, font: &Font) {
                             )
                             .context("Failed to load image")?;
                             let size = img.size();
-                            let sel = app.hex_ui.selection()
+                            let sel = app.hex.ui.selection()
                                 .context("Missing app selection")?;
                             let mut i = 0;
                             for y in 0..size.y {

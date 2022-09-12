@@ -118,11 +118,11 @@ pub fn top_menu(ui: &mut egui::Ui, gui: &mut crate::gui::Gui, app: &mut App, fon
             }
             ui.separator();
             if button_with_shortcut(ui, "Set select a", "shift+1").clicked() {
-                app.hex_ui.select_a = Some(app.edit_state.cursor);
+                app.hex.ui.select_a = Some(app.edit_state.cursor);
                 ui.close_menu();
             }
             if button_with_shortcut(ui, "Set select b", "shift+2").clicked() {
-                app.hex_ui.select_b = Some(app.edit_state.cursor);
+                app.hex.ui.select_b = Some(app.edit_state.cursor);
                 ui.close_menu();
             }
             if button_with_shortcut(ui, "Select all in view", "Ctrl+A").clicked() {
@@ -130,8 +130,8 @@ pub fn top_menu(ui: &mut egui::Ui, gui: &mut crate::gui::Gui, app: &mut App, fon
                 ui.close_menu();
             }
             if button_with_shortcut(ui, "Unselect all", "Esc").clicked() {
-                app.hex_ui.select_a = None;
-                app.hex_ui.select_b = None;
+                app.hex.ui.select_a = None;
+                app.hex.ui.select_b = None;
                 ui.close_menu();
             }
             ui.separator();
@@ -144,7 +144,7 @@ pub fn top_menu(ui: &mut egui::Ui, gui: &mut crate::gui::Gui, app: &mut App, fon
                 ui.close_menu();
             }
             if ui.button("Random fill").clicked() {
-                if let Some(sel) = app.hex_ui.selection() {
+                if let Some(sel) = app.hex.ui.selection() {
                     let range = sel.begin..=sel.end;
                     thread_rng().fill_bytes(&mut app.data[range.clone()]);
                     app.edit_state.widen_dirty_region(DamageRegion::RangeInclusive(range));
@@ -152,7 +152,7 @@ pub fn top_menu(ui: &mut egui::Ui, gui: &mut crate::gui::Gui, app: &mut App, fon
                 ui.close_menu();
             }
             if ui.button("Copy selection as hex").clicked() {
-                if let Some(sel) = app.hex_ui.selection() {
+                if let Some(sel) = app.hex.ui.selection() {
                     let mut s = String::new();
                     for &byte in &app.data[sel.begin..=sel.end] {
                         write!(&mut s, "{:02x} ", byte).unwrap();
@@ -162,7 +162,7 @@ pub fn top_menu(ui: &mut egui::Ui, gui: &mut crate::gui::Gui, app: &mut App, fon
                 ui.close_menu();
             }
             if ui.button("Save selection to file").clicked() {
-                if let Some(file_path) = rfd::FileDialog::new().save_file() && let Some(sel) = app.hex_ui.selection() {
+                if let Some(file_path) = rfd::FileDialog::new().save_file() && let Some(sel) = app.hex.ui.selection() {
                     let result = std::fs::write(file_path, &app.data[sel.begin..=sel.end]);
                     msg_if_fail(result, "Failed to save selection to file");
                 }
@@ -193,20 +193,20 @@ pub fn top_menu(ui: &mut egui::Ui, gui: &mut crate::gui::Gui, app: &mut App, fon
                 gui.add_dialog(JumpDialog::default());
             }
             if ui.button("Flash cursor").clicked() {
-                app.hex_ui.flash_cursor();
+                app.hex.ui.flash_cursor();
                 ui.close_menu();
             }
             if ui.button("Center view on cursor").clicked() {
                 app.center_view_on_offset(app.edit_state.cursor);
-                app.hex_ui.flash_cursor();
+                app.hex.ui.flash_cursor();
                 ui.close_menu();
             }
         });
         ui.menu_button("View", |ui| {
             ui.menu_button("Layout", |ui| {
-                for (k, v) in &app.meta_state.meta.layouts {
-                    if ui.selectable_label(app.hex_ui.current_layout == k, &v.name).clicked() {
-                        App::switch_layout(&mut app.hex_ui, &app.meta_state.meta, k);
+                for (k, v) in &app.hex.meta_state.meta.layouts {
+                    if ui.selectable_label(app.hex.ui.current_layout == k, &v.name).clicked() {
+                        app.hex.switch_layout(k);
                         ui.close_menu();
                     }
                 }
@@ -235,10 +235,10 @@ pub fn top_menu(ui: &mut egui::Ui, gui: &mut crate::gui::Gui, app: &mut App, fon
                 gui.perspectives_window.open.toggle();
                 ui.close_menu();
             }
-            let Some(view_key) = app.hex_ui.focused_view else { return };
-            let view = &mut app.meta_state.meta.views[view_key].view;
+            let Some(view_key) = app.hex.ui.focused_view else { return };
+            let view = &mut app.hex.meta_state.meta.views[view_key].view;
             if ui.button("Set offset to cursor").clicked() {
-                app.meta_state.meta.low.regions[app.meta_state.meta.low.perspectives[view.perspective].region].region.begin = app.edit_state.cursor;
+                app.hex.meta_state.meta.low.regions[app.hex.meta_state.meta.low.perspectives[view.perspective].region].region.begin = app.edit_state.cursor;
                 ui.close_menu();
             }
             if ui.button("Fill focused view").on_hover_text("Make the column count as big as the active view can fit").clicked() {
@@ -250,8 +250,8 @@ pub fn top_menu(ui: &mut egui::Ui, gui: &mut crate::gui::Gui, app: &mut App, fon
                         let cols = view.cols() as usize;
                         col_change_impl_view_perspective(
                             view,
-                            &mut app.meta_state.meta.low.perspectives,
-                            &app.meta_state.meta.low.regions,
+                            &mut app.hex.meta_state.meta.low.perspectives,
+                            &app.hex.meta_state.meta.low.regions,
                             |c| *c = cols,
                             app.preferences.col_change_lock_col,
                             app.preferences.col_change_lock_row
@@ -259,7 +259,7 @@ pub fn top_menu(ui: &mut egui::Ui, gui: &mut crate::gui::Gui, app: &mut App, fon
                     }
             }
             if ui.checkbox(
-                &mut app.meta_state.meta.low.perspectives[view.perspective].flip_row_order,
+                &mut app.hex.meta_state.meta.low.perspectives[view.perspective].flip_row_order,
                 "Flip row order (experimental)",
             ).clicked() {
                 ui.close_menu();
@@ -280,8 +280,8 @@ pub fn top_menu(ui: &mut egui::Ui, gui: &mut crate::gui::Gui, app: &mut App, fon
                 ui.close_menu();
             }
             ui.separator();
-            if ui.add_enabled(!app.meta_state.current_meta_path.as_os_str().is_empty(), egui::Button::new("Reload")).on_hover_text(format!("Reload from {}", app.meta_state.current_meta_path.display())).clicked() {
-                msg_if_fail(app.consume_meta_from_file(app.meta_state.current_meta_path.clone()), "Failed to load metafile");
+            if ui.add_enabled(!app.hex.meta_state.current_meta_path.as_os_str().is_empty(), egui::Button::new("Reload")).on_hover_text(format!("Reload from {}", app.hex.meta_state.current_meta_path.display())).clicked() {
+                msg_if_fail(app.consume_meta_from_file(app.hex.meta_state.current_meta_path.clone()), "Failed to load metafile");
                 ui.close_menu();
             }
             if ui.button("Load from file...").clicked() {
@@ -295,8 +295,8 @@ pub fn top_menu(ui: &mut egui::Ui, gui: &mut crate::gui::Gui, app: &mut App, fon
                 ui.close_menu();
             }
             ui.separator();
-            if ui.add_enabled(!app.meta_state.current_meta_path.as_os_str().is_empty(), egui::Button::new("Save")).on_hover_text(format!("Save to {}", app.meta_state.current_meta_path.display())).clicked() {
-                msg_if_fail(app.save_meta_to_file(app.meta_state.current_meta_path.clone(), false), "Failed to save metafile");
+            if ui.add_enabled(!app.hex.meta_state.current_meta_path.as_os_str().is_empty(), egui::Button::new("Save")).on_hover_text(format!("Save to {}", app.hex.meta_state.current_meta_path.display())).clicked() {
+                msg_if_fail(app.save_meta_to_file(app.hex.meta_state.current_meta_path.clone(), false), "Failed to save metafile");
                 ui.close_menu();
             }
             if ui.button("Save as...").clicked() {

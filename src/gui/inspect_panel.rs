@@ -411,11 +411,11 @@ enum Action {
 }
 
 pub fn ui(ui: &mut Ui, app: &mut App, gui: &mut crate::gui::Gui, mouse_pos: ViewportVec) {
-    if app.hex_ui.current_layout.is_null() {
+    if app.hex.ui.current_layout.is_null() {
         ui.label("No active layout");
         return;
     }
-    let offset = match app.hex_ui.interact_mode {
+    let offset = match app.hex.ui.interact_mode {
         InteractMode::View => {
             if let Some((off, _view_idx)) = app.byte_offset_at_pos(mouse_pos.x, mouse_pos.y) {
                 let mut add = 0;
@@ -544,13 +544,13 @@ pub fn ui(ui: &mut Ui, app: &mut App, gui: &mut crate::gui::Gui, mouse_pos: View
                     app.edit_state.set_cursor(offset);
                 }
                 app.center_view_on_offset(app.edit_state.cursor);
-                app.hex_ui.flash_cursor();
+                app.hex.ui.flash_cursor();
             }
             Action::AddDirty(damage) => app.edit_state.widen_dirty_region(damage),
             Action::JumpForward(amount) => {
                 app.edit_state.set_cursor(app.edit_state.cursor + amount);
                 app.center_view_on_offset(app.edit_state.cursor);
-                app.hex_ui.flash_cursor();
+                app.hex.ui.flash_cursor();
             }
         }
     }

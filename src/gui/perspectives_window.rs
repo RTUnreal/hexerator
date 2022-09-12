@@ -34,13 +34,13 @@ impl PerspectivesWindow {
                 });
             })
             .body(|body| {
-                let keys: Vec<_> = app.meta_state.meta.low.perspectives.keys().collect();
+                let keys: Vec<_> = app.hex.meta_state.meta.low.perspectives.keys().collect();
                 let mut action = Action::None;
                 body.rows(20.0, keys.len(), |idx, mut row| {
                     row.col(|ui| {
                         if gui.perspectives_window.rename_idx == keys[idx] {
                             let re = ui.text_edit_singleline(
-                                &mut app.meta_state.meta.low.perspectives[keys[idx]].name,
+                                &mut app.hex.meta_state.meta.low.perspectives[keys[idx]].name,
                             );
                             if re.lost_focus() {
                                 gui.perspectives_window.rename_idx = PerspectiveKey::null();
@@ -49,7 +49,7 @@ impl PerspectivesWindow {
                             }
                         } else {
                             ui.menu_button(
-                                &app.meta_state.meta.low.perspectives[keys[idx]].name,
+                                &app.hex.meta_state.meta.low.perspectives[keys[idx]].name,
                                 |ui| {
                                     if ui.button("✏ Rename").clicked() {
                                         gui.perspectives_window.rename_idx = keys[idx];
@@ -64,8 +64,8 @@ impl PerspectivesWindow {
                         }
                     });
                     row.col(|ui| {
-                        let per = &app.meta_state.meta.low.perspectives[keys[idx]];
-                        let reg = &app.meta_state.meta.low.regions[per.region];
+                        let per = &app.hex.meta_state.meta.low.perspectives[keys[idx]];
+                        let reg = &app.hex.meta_state.meta.low.regions[per.region];
                         if ui
                             .link(&reg.name)
                             .on_hover_text(&reg.desc)
@@ -77,12 +77,12 @@ impl PerspectivesWindow {
                     });
                     row.col(|ui| {
                         ui.add(egui::DragValue::new(
-                            &mut app.meta_state.meta.low.perspectives[keys[idx]].cols,
+                            &mut app.hex.meta_state.meta.low.perspectives[keys[idx]].cols,
                         ));
                     });
                     row.col(|ui| {
                         ui.checkbox(
-                            &mut app.meta_state.meta.low.perspectives[keys[idx]].flip_row_order,
+                            &mut app.hex.meta_state.meta.low.perspectives[keys[idx]].flip_row_order,
                             "",
                         );
                     });
@@ -90,7 +90,7 @@ impl PerspectivesWindow {
                 match action {
                     Action::None => {}
                     Action::Remove(key) => {
-                        app.meta_state.meta.low.perspectives.remove(key);
+                        app.hex.meta_state.meta.low.perspectives.remove(key);
                     }
                     Action::OpenRegion(key) => {
                         gui.regions_window.open.set(true);
@@ -99,15 +99,16 @@ impl PerspectivesWindow {
                     Action::Goto(off) => {
                         app.center_view_on_offset(off);
                         app.edit_state.set_cursor(off);
-                        app.hex_ui.flash_cursor();
+                        app.hex.ui.flash_cursor();
                     }
                 }
             });
         ui.separator();
         ui.menu_button("New from region", |ui| {
-            for (key, region) in app.meta_state.meta.low.regions.iter() {
+            for (key, region) in app.hex.meta_state.meta.low.regions.iter() {
                 if ui.button(&region.name).clicked() {
-                    app.meta_state
+                    app.hex
+                        .meta_state
                         .meta
                         .low
                         .perspectives

@@ -139,8 +139,8 @@ impl FileDiffResultWindow {
                                 .link(entry.offset.to_string())
                                 .context_menu(|ui| {
                                     if ui.button("Add bookmark").clicked() {
-                                        let idx = app.meta_state.meta.bookmarks.len();
-                                        app.meta_state.meta.bookmarks.push(Bookmark {
+                                        let idx = app.hex.meta_state.meta.bookmarks.len();
+                                        app.hex.meta_state.meta.bookmarks.push(Bookmark {
                                             offset: entry.offset,
                                             label: "New bookmark".into(),
                                             desc: String::new(),
@@ -157,11 +157,11 @@ impl FileDiffResultWindow {
                         });
                         row.col(|ui| {
                             match find_most_specific_region_for_offset(
-                                &app.meta_state.meta.low.regions,
+                                &app.hex.meta_state.meta.low.regions,
                                 entry.offset,
                             ) {
                                 Some(reg_key) => {
-                                    let reg = &app.meta_state.meta.low.regions[reg_key];
+                                    let reg = &app.hex.meta_state.meta.low.regions[reg_key];
                                     ui.menu_button(&reg.name, |ui| {
                                         if ui.button("Remove region from results").clicked() {
                                             action = Action::RemoveRegion(reg_key);
@@ -178,6 +178,7 @@ impl FileDiffResultWindow {
                         });
                         row.col(|ui| {
                             match app
+                                .hex
                                 .meta_state
                                 .meta
                                 .bookmarks
@@ -208,11 +209,11 @@ impl FileDiffResultWindow {
             Action::Goto(off) => {
                 app.center_view_on_offset(off);
                 app.edit_state.set_cursor(off);
-                app.hex_ui.flash_cursor();
+                app.hex.ui.flash_cursor();
             }
             Action::RemoveRegion(key) => gui.file_diff_result_window.diff_entries.retain(|en| {
                 let reg = find_most_specific_region_for_offset(
-                    &app.meta_state.meta.low.regions,
+                    &app.hex.meta_state.meta.low.regions,
                     en.offset,
                 );
                 reg != Some(key)

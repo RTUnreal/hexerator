@@ -313,17 +313,17 @@ impl View {
     ) {
         vertex_buffer.clear();
         let mut rs = RenderStates::default();
-        let this = &app.meta_state.meta.views[key];
+        let this = &app.hex.meta_state.meta.views[key];
         match &this.view.kind {
             ViewKind::Hex(hex) => {
                 draw_view(
                     &this.view,
-                    &app.meta_state.meta.low.perspectives,
-                    &app.meta_state.meta.low.regions,
+                    &app.hex.meta_state.meta.low.perspectives,
+                    &app.hex.meta_state.meta.low.regions,
                     &app.data,
                     vertex_buffer,
                     |vertex_buffer, x, y, data, idx, c| {
-                        if selected_or_find_result_contains(app.hex_ui.selection(), idx, gui) {
+                        if selected_or_find_result_contains(app.hex.ui.selection(), idx, gui) {
                             draw_rect(
                                 vertex_buffer,
                                 x,
@@ -358,8 +358,8 @@ impl View {
                                 x + f32::from(extra_x),
                                 y,
                                 vertex_buffer,
-                                app.hex_ui.focused_view == Some(key),
-                                app.hex_ui.cursor_flash_timer(),
+                                app.hex.ui.focused_view == Some(key),
+                                app.hex.ui.cursor_flash_timer(),
                                 &this.view.presentation,
                                 hex.font_size,
                             );
@@ -371,12 +371,12 @@ impl View {
             ViewKind::Dec(dec) => {
                 draw_view(
                     &this.view,
-                    &app.meta_state.meta.low.perspectives,
-                    &app.meta_state.meta.low.regions,
+                    &app.hex.meta_state.meta.low.perspectives,
+                    &app.hex.meta_state.meta.low.regions,
                     &app.data,
                     vertex_buffer,
                     |vertex_buffer, x, y, data, idx, c| {
-                        if selected_or_find_result_contains(app.hex_ui.selection(), idx, gui) {
+                        if selected_or_find_result_contains(app.hex.ui.selection(), idx, gui) {
                             draw_rect(
                                 vertex_buffer,
                                 x,
@@ -411,8 +411,8 @@ impl View {
                                 x + f32::from(extra_x),
                                 y,
                                 vertex_buffer,
-                                app.hex_ui.focused_view == Some(key),
-                                app.hex_ui.cursor_flash_timer(),
+                                app.hex.ui.focused_view == Some(key),
+                                app.hex.ui.cursor_flash_timer(),
                                 &this.view.presentation,
                                 dec.font_size,
                             );
@@ -424,12 +424,12 @@ impl View {
             ViewKind::Text(text) => {
                 draw_view(
                     &this.view,
-                    &app.meta_state.meta.low.perspectives,
-                    &app.meta_state.meta.low.regions,
+                    &app.hex.meta_state.meta.low.perspectives,
+                    &app.hex.meta_state.meta.low.regions,
                     &app.data,
                     vertex_buffer,
                     |vertex_buffer, x, y, data, idx, c| {
-                        if selected_or_find_result_contains(app.hex_ui.selection(), idx, gui) {
+                        if selected_or_find_result_contains(app.hex.ui.selection(), idx, gui) {
                             draw_rect(
                                 vertex_buffer,
                                 x,
@@ -463,8 +463,8 @@ impl View {
                                 x,
                                 y,
                                 vertex_buffer,
-                                app.hex_ui.focused_view == Some(key),
-                                app.hex_ui.cursor_flash_timer(),
+                                app.hex.ui.focused_view == Some(key),
+                                app.hex.ui.cursor_flash_timer(),
                                 &this.view.presentation,
                                 text.font_size,
                             );
@@ -476,12 +476,12 @@ impl View {
             ViewKind::Block => {
                 draw_view(
                     &this.view,
-                    &app.meta_state.meta.low.perspectives,
-                    &app.meta_state.meta.low.regions,
+                    &app.hex.meta_state.meta.low.perspectives,
+                    &app.hex.meta_state.meta.low.regions,
                     &app.data,
                     vertex_buffer,
                     |vertex_buffer, x, y, _byte, idx, mut c| {
-                        if selected_or_find_result_contains(app.hex_ui.selection(), idx, gui) {
+                        if selected_or_find_result_contains(app.hex.ui.selection(), idx, gui) {
                             c = invert_color(c);
                         }
                         draw_rect(
@@ -497,8 +497,8 @@ impl View {
                                 x,
                                 y,
                                 vertex_buffer,
-                                app.hex_ui.focused_view == Some(key),
-                                app.hex_ui.cursor_flash_timer(),
+                                app.hex.ui.focused_view == Some(key),
+                                app.hex.ui.cursor_flash_timer(),
                                 &this.view.presentation,
                                 &this.view,
                             );
@@ -513,14 +513,14 @@ impl View {
             this.view.viewport_rect.y.into(),
             this.view.viewport_rect.w.into(),
             this.view.viewport_rect.h.into(),
-            if Some(key) == app.hex_ui.focused_view {
+            if Some(key) == app.hex.ui.focused_view {
                 Color::rgb(255, 255, 150)
             } else {
                 Color::rgb(120, 120, 150)
             },
             1.0,
         );
-        if app.hex_ui.scissor_views {
+        if app.hex.ui.scissor_views {
             unsafe {
                 glu_sys::glEnable(glu_sys::GL_SCISSOR_TEST);
                 #[expect(
@@ -539,7 +539,7 @@ impl View {
             }
         }
         let mut overlay_text = None;
-        if app.hex_ui.show_alt_overlay {
+        if app.hex.ui.show_alt_overlay {
             let mut text = Text::new(&this.name, font, 16);
             text.set_position((
                 f32::from(this.view.viewport_rect.x),
@@ -557,7 +557,7 @@ impl View {
             overlay_text = Some(text);
         }
         window.draw_primitives(vertex_buffer, PrimitiveType::QUADS, &rs);
-        if app.hex_ui.scissor_views {
+        if app.hex.ui.scissor_views {
             unsafe {
                 glu_sys::glDisable(glu_sys::GL_SCISSOR_TEST);
             }

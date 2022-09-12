@@ -53,7 +53,7 @@ impl Dialog for JumpDialog {
                     };
                     app.edit_state.cursor = offset;
                     app.center_view_on_offset(offset);
-                    app.hex_ui.flash_cursor();
+                    app.hex.ui.flash_cursor();
                     false
                 }
                 Err(e) => {
@@ -104,7 +104,7 @@ impl Dialog for PatternFillDialog {
     }
 
     fn ui(&mut self, ui: &mut egui::Ui, app: &mut App) -> bool {
-        let Some(sel) = app.hex_ui.selection() else {
+        let Some(sel) = app.hex.ui.selection() else {
             ui.heading("No active selection");
             return true;
         };
@@ -146,7 +146,7 @@ impl Dialog for LuaFillDialog {
     }
 
     fn ui(&mut self, ui: &mut egui::Ui, app: &mut App) -> bool {
-        let Some(sel) = app.hex_ui.selection() else {
+        let Some(sel) = app.hex.ui.selection() else {
             ui.heading("No active selection");
             return true;
         };
@@ -165,7 +165,7 @@ impl Dialog for LuaFillDialog {
             // beyond window height
             .max_height(ui.available_height() - 100.0)
             .show(ui, |ui| {
-                egui::TextEdit::multiline(&mut app.meta_state.meta.misc.fill_lua_script)
+                egui::TextEdit::multiline(&mut app.hex.meta_state.meta.misc.fill_lua_script)
                     .code_editor()
                     .desired_width(f32::INFINITY)
                     .show(ui);
@@ -174,7 +174,7 @@ impl Dialog for LuaFillDialog {
             let start_time = Instant::now();
             let lua = Lua::default();
             lua.context(|ctx| {
-                let chunk = ctx.load(&app.meta_state.meta.misc.fill_lua_script);
+                let chunk = ctx.load(&app.hex.meta_state.meta.misc.fill_lua_script);
                 match chunk.eval::<Function>() {
                     Ok(f) => {
                         let res: rlua::Result<()> = try {

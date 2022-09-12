@@ -24,17 +24,17 @@ impl LayoutsWindow {
     ) {
         let win = &mut gui.layouts_window;
         if win.open.just_now() {
-            win.selected = app.hex_ui.current_layout;
+            win.selected = app.hex.ui.current_layout;
         }
-        for (k, v) in &app.meta_state.meta.layouts {
+        for (k, v) in &app.hex.meta_state.meta.layouts {
             if ui.selectable_label(win.selected == k, &v.name).clicked() {
                 win.selected = k;
-                App::switch_layout(&mut app.hex_ui, &app.meta_state.meta, k);
+                app.hex.switch_layout(k);
             }
         }
         if !win.selected.is_null() {
             ui.separator();
-            let layout = &mut app.meta_state.meta.layouts[win.selected];
+            let layout = &mut app.hex.meta_state.meta.layouts[win.selected];
             ui.horizontal(|ui| {
                 if win.edit_name {
                     if ui.text_edit_singleline(&mut layout.name).lost_focus() {
@@ -48,6 +48,7 @@ impl LayoutsWindow {
                 }
             });
             let unused_views: Vec<ViewKey> = app
+                .hex
                 .meta_state
                 .meta
                 .views
@@ -60,7 +61,7 @@ impl LayoutsWindow {
                     let mut retain_row = true;
                     row.retain_mut(|view_key| {
                         let mut retain = true;
-                        let view = &app.meta_state.meta.views[*view_key];
+                        let view = &app.hex.meta_state.meta.views[*view_key];
                         if win.swap_a == *view_key {
                             if ui.selectable_label(true, &view.name).clicked() {
                                 win.swap_a = ViewKey::null();
@@ -72,7 +73,7 @@ impl LayoutsWindow {
                         } else {
                             ui.menu_button(&view.name, |ui| {
                                 for &k in &unused_views {
-                                    if ui.button(&app.meta_state.meta.views[k].name).clicked() {
+                                    if ui.button(&app.hex.meta_state.meta.views[k].name).clicked() {
                                         *view_key = k;
                                         ui.close_menu();
                                     }
@@ -101,7 +102,7 @@ impl LayoutsWindow {
                     ui.add_enabled_ui(!unused_views.is_empty(), |ui| {
                         ui.menu_button("✚", |ui| {
                             for &k in &unused_views {
-                                if ui.button(&app.meta_state.meta.views[k].name).clicked() {
+                                if ui.button(&app.hex.meta_state.meta.views[k].name).clicked() {
                                     row.push(k);
                                     ui.close_menu();
                                 }
@@ -135,7 +136,7 @@ impl LayoutsWindow {
                 ui.add_enabled_ui(!unused_views.is_empty(), |ui| {
                     ui.menu_button("✚", |ui| {
                         for &k in &unused_views {
-                            if ui.button(&app.meta_state.meta.views[k].name).clicked() {
+                            if ui.button(&app.hex.meta_state.meta.views[k].name).clicked() {
                                 layout.view_grid.push(vec![k]);
                                 ui.close_menu();
                             }
@@ -153,13 +154,13 @@ impl LayoutsWindow {
         }
         ui.separator();
         if ui.button("New layout").clicked() {
-            let key = app.meta_state.meta.layouts.insert(Layout {
+            let key = app.hex.meta_state.meta.layouts.insert(Layout {
                 name: "New layout".into(),
                 view_grid: Vec::new(),
                 margin: default_margin(),
             });
             win.selected = key;
-            App::switch_layout(&mut app.hex_ui, &app.meta_state.meta, key);
+            app.hex.switch_layout(key);
         }
         win.open.post_ui();
     }

@@ -48,8 +48,28 @@ pub struct App {
     pub cfg: Config,
     last_reload: Instant,
     pub preferences: Preferences,
-    pub hex_ui: HexUi,
+    pub hex: HexState,
+}
+
+/// Contains the hex UI and the meta state
+#[derive(Default)]
+pub struct HexState {
+    pub ui: HexUi,
     pub meta_state: MetaState,
+}
+
+impl HexState {
+    pub(crate) fn switch_layout(&mut self, k: LayoutKey) {
+        self.ui.current_layout = k;
+        // Set focused view to the first available view in the layout
+        if let Some(view_key) = self.meta_state.meta.layouts[k]
+            .view_grid
+            .get(0)
+            .and_then(|row| row.get(0))
+        {
+            self.ui.focused_view = Some(*view_key);
+        }
+    }
 }
 
 impl App {
@@ -68,8 +88,7 @@ impl App {
             cfg,
             last_reload: Instant::now(),
             preferences: Preferences::default(),
-            hex_ui: HexUi::default(),
-            meta_state: MetaState::default(),
+            hex: Default::default(),
         };
         msg_if_fail(this.load_file_args(args, font), "Failed to load file");
         Ok(this)
@@ -155,7 +174,7 @@ impl App {
     pub fn save_temp_metafile_backup(&mut self) -> anyhow::Result<()> {
         // We set the last_meta_backup first, so if save fails, we don't get
         // a never ending stream of constant save failures.
-        self.meta_state.last_meta_backup.set(Instant::now());
+        self.hex.meta_state.last_meta_backup.set(Instant::now());
         self.save_meta_to_file(temp_metafile_backup_path(), true)?;
         per_msg!("Saved temp metafile backup");
         Ok(())
@@ -163,15 +182,15 @@ impl App {
     pub fn search_focus(&mut self, offset: usize) {
         self.edit_state.cursor = offset;
         self.center_view_on_offset(offset);
-        self.hex_ui.flash_cursor();
+        self.hex.ui.flash_cursor();
     }
 
     pub(crate) fn center_view_on_offset(&mut self, offset: usize) {
-        if let Some(key) = self.hex_ui.focused_view {
-            self.meta_state.meta.views[key].view.center_on_offset(
+        if let Some(key) = self.hex.ui.focused_view {
+            self.hex.meta_state.meta.views[key].view.center_on_offset(
                 offset,
-                &self.meta_state.meta.low.perspectives,
-                &self.meta_state.meta.low.regions,
+                &self.hex.meta_state.meta.low.perspectives,
+                &self.hex.meta_state.meta.low.regions,
             );
         }
     }
@@ -187,12 +206,12 @@ impl App {
         self.col_change_impl(|col| *col -= 1);
     }
     fn col_change_impl(&mut self, f: impl FnOnce(&mut usize)) {
-        if let Some(key) = self.hex_ui.focused_view {
-            let view = &mut self.meta_state.meta.views[key].view;
+        if let Some(key) = self.hex.ui.focused_view {
+            let view = &mut self.hex.meta_state.meta.views[key].view;
             col_change_impl_view_perspective(
                 view,
-                &mut self.meta_state.meta.low.perspectives,
-                &self.meta_state.meta.low.regions,
+                &mut self.hex.meta_state.meta.low.perspectives,
+                &self.hex.meta_state.meta.low.regions,
                 f,
                 self.preferences.col_change_lock_col,
                 self.preferences.col_change_lock_row,
@@ -211,13 +230,13 @@ impl App {
     pub fn cursor_history_back(&mut self) {
         if self.edit_state.cursor_history_back() {
             self.center_view_on_offset(self.edit_state.cursor);
-            self.hex_ui.flash_cursor();
+            self.hex.ui.flash_cursor();
         }
     }
     pub fn cursor_history_forward(&mut self) {
         if self.edit_state.cursor_history_forward() {
             self.center_view_on_offset(self.edit_state.cursor);
-            self.hex_ui.flash_cursor();
+            self.hex.ui.flash_cursor();
         }
     }
 
@@ -246,9 +265,9 @@ impl App {
 
     /// Readjust to a new file
     pub fn new_file_readjust(&mut self, font: &Font) {
-        self.meta_state.meta = Meta::default();
-        self.meta_state.current_meta_path.clear();
-        let def_region = self.meta_state.meta.low.regions.insert(NamedRegion {
+        self.hex.meta_state.meta = Meta::default();
+        self.hex.meta_state.current_meta_path.clear();
+        let def_region = self.hex.meta_state.meta.low.regions.insert(NamedRegion {
             name: "default".into(),
             region: Region {
                 begin: 0,
@@ -256,23 +275,29 @@ impl App {
             },
             desc: String::new(),
         });
-        let default_perspective = self.meta_state.meta.low.perspectives.insert(Perspective {
-            region: def_region,
-            cols: 48,
-            flip_row_order: false,
-            name: "default".to_string(),
-        });
+        let default_perspective = self
+            .hex
+            .meta_state
+            .meta
+            .low
+            .perspectives
+            .insert(Perspective {
+                region: def_region,
+                cols: 48,
+                flip_row_order: false,
+                name: "default".to_string(),
+            });
         let mut layout = Layout {
             name: "Default layout".into(),
             view_grid: vec![vec![]],
             margin: default_margin(),
         };
         for view in default_views(font, default_perspective) {
-            let k = self.meta_state.meta.views.insert(view);
+            let k = self.hex.meta_state.meta.views.insert(view);
             layout.view_grid[0].push(k);
         }
-        let layout_key = self.meta_state.meta.layouts.insert(layout);
-        App::switch_layout(&mut self.hex_ui, &self.meta_state.meta, layout_key);
+        let layout_key = self.hex.meta_state.meta.layouts.insert(layout);
+        self.hex.switch_layout(layout_key);
     }
 
     pub fn close_file(&mut self) {
@@ -301,7 +326,7 @@ impl App {
     pub(crate) fn set_cursor_init(&mut self) {
         self.edit_state.cursor = self.args.src.jump.unwrap_or(0);
         self.center_view_on_offset(self.edit_state.cursor);
-        self.hex_ui.flash_cursor();
+        self.hex.ui.flash_cursor();
     }
 
     pub(crate) fn try_read_stream(&mut self) {
@@ -309,15 +334,15 @@ impl App {
         if !src.attr.stream {
             return;
         };
-        let Some(view_key) = self.hex_ui.focused_view else { return };
-        let view = &self.meta_state.meta.views[view_key].view;
+        let Some(view_key) = self.hex.ui.focused_view else { return };
+        let view = &self.hex.meta_state.meta.views[view_key].view;
         let view_byte_offset = view
             .offsets(
-                &self.meta_state.meta.low.perspectives,
-                &self.meta_state.meta.low.regions,
+                &self.hex.meta_state.meta.low.perspectives,
+                &self.hex.meta_state.meta.low.regions,
             )
             .byte;
-        let bytes_per_page = view.bytes_per_page(&self.meta_state.meta.low.perspectives);
+        let bytes_per_page = view.bytes_per_page(&self.hex.meta_state.meta.low.perspectives);
         // Don't read past what we need for our current view offset
         if view_byte_offset + bytes_per_page < self.data.len() {
             return;
@@ -332,9 +357,10 @@ impl App {
                         src.state.stream_end = true;
                     } else {
                         self.data.extend_from_slice(&buf[..]);
-                        let perspective = &self.meta_state.meta.low.perspectives[view.perspective];
+                        let perspective =
+                            &self.hex.meta_state.meta.low.perspectives[view.perspective];
                         let region =
-                            &mut self.meta_state.meta.low.regions[perspective.region].region;
+                            &mut self.hex.meta_state.meta.low.regions[perspective.region].region;
                         region.end = self.data.len() - 1;
                     }
                 }
@@ -366,18 +392,18 @@ impl App {
     //
     // Also returns the index of the view the position is from
     pub fn byte_offset_at_pos(&mut self, x: i16, y: i16) -> Option<(usize, ViewKey)> {
-        let layout = &self.meta_state.meta.layouts[self.hex_ui.current_layout];
+        let layout = &self.hex.meta_state.meta.layouts[self.hex.ui.current_layout];
         for view_key in layout.iter() {
-            let view = &self.meta_state.meta.views[view_key];
+            let view = &self.hex.meta_state.meta.views[view_key];
             if let Some((row, col)) = view.view.row_col_offset_of_pos(
                 x,
                 y,
-                &self.meta_state.meta.low.perspectives,
-                &self.meta_state.meta.low.regions,
+                &self.hex.meta_state.meta.low.perspectives,
+                &self.hex.meta_state.meta.low.regions,
             ) {
                 return Some((
-                    self.meta_state.meta.low.perspectives[view.view.perspective]
-                        .byte_offset_of_row_col(row, col, &self.meta_state.meta.low.regions),
+                    self.hex.meta_state.meta.low.perspectives[view.view.perspective]
+                        .byte_offset_of_row_col(row, col, &self.hex.meta_state.meta.low.regions),
                     view_key,
                 ));
             }
@@ -385,9 +411,9 @@ impl App {
         None
     }
     pub fn view_idx_at_pos(&self, x: i16, y: i16) -> Option<ViewKey> {
-        let layout = &self.meta_state.meta.layouts[self.hex_ui.current_layout];
+        let layout = &self.hex.meta_state.meta.layouts[self.hex.ui.current_layout];
         for view_key in layout.iter() {
-            let view = &self.meta_state.meta.views[view_key];
+            let view = &self.hex.meta_state.meta.views[view_key];
             if view.view.viewport_rect.contains_pos(x, y) {
                 return Some(view_key);
             }
@@ -396,11 +422,11 @@ impl App {
     }
 
     pub fn save_meta_to_file(&mut self, path: PathBuf, temp: bool) -> Result<(), anyhow::Error> {
-        let data = rmp_serde::to_vec(&self.meta_state.meta)?;
+        let data = rmp_serde::to_vec(&self.hex.meta_state.meta)?;
         std::fs::write(&path, &data)?;
         if !temp {
-            self.meta_state.current_meta_path = path;
-            self.meta_state.clean_meta = self.meta_state.meta.clone();
+            self.hex.meta_state.current_meta_path = path;
+            self.hex.meta_state.clean_meta = self.hex.meta_state.meta.clone();
         }
         Ok(())
     }
@@ -422,21 +448,21 @@ impl App {
             if let Some(offset) = self.args.src.jump {
                 self.center_view_on_offset(offset);
                 self.edit_state.cursor = offset;
-                self.hex_ui.flash_cursor();
+                self.hex.ui.flash_cursor();
             }
         }
         Ok(())
     }
     /// Called every frame
     pub(crate) fn update(&mut self) {
-        if !self.hex_ui.current_layout.is_null() {
-            let layout = &self.meta_state.meta.layouts[self.hex_ui.current_layout];
+        if !self.hex.ui.current_layout.is_null() {
+            let layout = &self.hex.meta_state.meta.layouts[self.hex.ui.current_layout];
             do_auto_layout(
                 layout,
-                &mut self.meta_state.meta.views,
-                &self.hex_ui.hex_iface_rect,
-                &self.meta_state.meta.low.perspectives,
-                &self.meta_state.meta.low.regions,
+                &mut self.hex.meta_state.meta.views,
+                &self.hex.ui.hex_iface_rect,
+                &self.hex.meta_state.meta.low.perspectives,
+                &self.hex.meta_state.meta.low.regions,
             );
         }
         if self.preferences.auto_save && self.edit_state.dirty_region.is_some() {
@@ -455,12 +481,12 @@ impl App {
         }
     }
     pub(crate) fn focused_view_select_all(&mut self) {
-        if let Some(view) = self.hex_ui.focused_view {
-            let p_key = self.meta_state.meta.views[view].view.perspective;
-            let p = &self.meta_state.meta.low.perspectives[p_key];
-            let r = &self.meta_state.meta.low.regions[p.region];
-            self.hex_ui.select_a = Some(r.region.begin);
-            self.hex_ui.select_b = Some(r.region.end);
+        if let Some(view) = self.hex.ui.focused_view {
+            let p_key = self.hex.meta_state.meta.views[view].view.perspective;
+            let p = &self.hex.meta_state.meta.low.perspectives[p_key];
+            let r = &self.hex.meta_state.meta.low.regions[p.region];
+            self.hex.ui.select_a = Some(r.region.begin);
+            self.hex.ui.select_b = Some(r.region.end);
         }
     }
 
@@ -486,21 +512,9 @@ impl App {
         Ok(())
     }
 
-    pub(crate) fn switch_layout(app_hex_ui: &mut HexUi, app_meta: &Meta, k: LayoutKey) {
-        app_hex_ui.current_layout = k;
-        // Set focused view to the first available view in the layout
-        if let Some(view_key) = app_meta.layouts[k]
-            .view_grid
-            .get(0)
-            .and_then(|row| row.get(0))
-        {
-            app_hex_ui.focused_view = Some(*view_key);
-        }
-    }
-
     pub(crate) fn focus_prev_view_in_layout(&mut self) {
-        if let Some(focused_view_key) = self.hex_ui.focused_view {
-            let layout = &self.meta_state.meta.layouts[self.hex_ui.current_layout];
+        if let Some(focused_view_key) = self.hex.ui.focused_view {
+            let layout = &self.hex.meta_state.meta.layouts[self.hex.ui.current_layout];
             if let Some(focused_idx) = layout.iter().position(|k| k == focused_view_key) {
                 let new_idx = if focused_idx == 0 {
                     layout.iter().count() - 1
@@ -508,15 +522,15 @@ impl App {
                     focused_idx - 1
                 };
                 if let Some(new_key) = layout.iter().nth(new_idx) {
-                    self.hex_ui.focused_view = Some(new_key);
+                    self.hex.ui.focused_view = Some(new_key);
                 }
             }
         }
     }
 
     pub(crate) fn focus_next_view_in_layout(&mut self) {
-        if let Some(focused_view_key) = self.hex_ui.focused_view {
-            let layout = &self.meta_state.meta.layouts[self.hex_ui.current_layout];
+        if let Some(focused_view_key) = self.hex.ui.focused_view {
+            let layout = &self.hex.meta_state.meta.layouts[self.hex.ui.current_layout];
             if let Some(focused_idx) = layout.iter().position(|k| k == focused_view_key) {
                 let new_idx = if focused_idx == layout.iter().count() - 1 {
                     0
@@ -524,7 +538,7 @@ impl App {
                     focused_idx + 1
                 };
                 if let Some(new_key) = layout.iter().nth(new_idx) {
-                    self.hex_ui.focused_view = Some(new_key);
+                    self.hex.ui.focused_view = Some(new_key);
                 }
             }
         }
@@ -547,14 +561,14 @@ impl App {
     pub fn consume_meta_from_file(&mut self, path: PathBuf) -> Result<(), anyhow::Error> {
         let data = std::fs::read(&path)?;
         let meta = rmp_serde::from_slice(&data)?;
-        self.hex_ui.clear_meta_refs();
-        self.meta_state.meta = meta;
-        self.meta_state.clean_meta = self.meta_state.meta.clone();
-        self.meta_state.current_meta_path = path;
-        self.meta_state.meta.post_load_init();
+        self.hex.ui.clear_meta_refs();
+        self.hex.meta_state.meta = meta;
+        self.hex.meta_state.clean_meta = self.hex.meta_state.meta.clone();
+        self.hex.meta_state.current_meta_path = path;
+        self.hex.meta_state.meta.post_load_init();
         // Switch to first layout, if there is one
-        if let Some(layout_key) = self.meta_state.meta.layouts.keys().next() {
-            App::switch_layout(&mut self.hex_ui, &self.meta_state.meta, layout_key);
+        if let Some(layout_key) = self.hex.meta_state.meta.layouts.keys().next() {
+            self.hex.switch_layout(layout_key);
         }
         Ok(())
     }

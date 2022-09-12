@@ -146,9 +146,9 @@ pub fn do_egui(
                         .inner_margin(2.0)
                         .show(ui, |ui| match &menu.data {
                             &ContextMenuData::ViewByte { view, byte_off } => {
-                                if let Some(sel) = app.hex_ui.selection() {
+                                if let Some(sel) = app.hex.ui.selection() {
                                     if ui.button("Add selection as region").clicked() {
-                                        ops::add_region_from_selection(sel, &mut app.meta_state, &mut gui.regions_window)
+                                        ops::add_region_from_selection(sel, &mut app.hex.meta_state, &mut gui.regions_window)
                                     }
                                     ui.separator();
                                 }
@@ -156,7 +156,7 @@ pub fn do_egui(
                                     .button("Add bookmark")
                                     .clicked()
                                 {
-                                    let bms = &mut app.meta_state.meta.bookmarks;
+                                    let bms = &mut app.hex.meta_state.meta.bookmarks;
                                     let idx = bms.len();
                                     bms.push(Bookmark {
                                         offset: byte_off,
@@ -190,28 +190,28 @@ pub fn do_egui(
             .show(ctx, |ui| inspect_panel::ui(ui, app, gui, mouse_pos))
             .response;
         let padding = 2;
-        app.hex_ui.hex_iface_rect.x = padding;
+        app.hex.ui.hex_iface_rect.x = padding;
         #[expect(
             clippy::cast_possible_truncation,
             reason = "Window size can't exceed i16"
         )]
         {
-            app.hex_ui.hex_iface_rect.y = top_re.response.rect.bottom() as ViewportScalar + padding;
+            app.hex.ui.hex_iface_rect.y = top_re.response.rect.bottom() as ViewportScalar + padding;
         }
         #[expect(
             clippy::cast_possible_truncation,
             reason = "Window size can't exceed i16"
         )]
         {
-            app.hex_ui.hex_iface_rect.w = right_re.rect.left() as ViewportScalar - padding * 2;
+            app.hex.ui.hex_iface_rect.w = right_re.rect.left() as ViewportScalar - padding * 2;
         }
         #[expect(
             clippy::cast_possible_truncation,
             reason = "Window size can't exceed i16"
         )]
         {
-            app.hex_ui.hex_iface_rect.h = (bot_re.response.rect.top() as ViewportScalar
-                - app.hex_ui.hex_iface_rect.y)
+            app.hex.ui.hex_iface_rect.h = (bot_re.response.rect.top() as ViewportScalar
+                - app.hex.ui.hex_iface_rect.y)
                 - padding * 2;
         }
         let mut dialogs: Vec<_> = std::mem::take(&mut gui.dialogs);

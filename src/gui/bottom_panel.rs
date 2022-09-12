@@ -13,25 +13,25 @@ pub fn ui(ui: &mut Ui, app: &mut App, mouse_pos: ViewportVec) {
     ui.horizontal(|ui| {
         let job = key_label(ui, "F1", "View");
         if ui
-            .selectable_label(app.hex_ui.interact_mode == InteractMode::View, job)
+            .selectable_label(app.hex.ui.interact_mode == InteractMode::View, job)
             .clicked()
         {
-            app.hex_ui.interact_mode = InteractMode::View;
+            app.hex.ui.interact_mode = InteractMode::View;
         }
         ui.style_mut().visuals.selection.bg_fill = Color32::from_rgb(168, 150, 32);
         let job = key_label(ui, "F2", "Edit");
         if ui
-            .selectable_label(app.hex_ui.interact_mode == InteractMode::Edit, job)
+            .selectable_label(app.hex.ui.interact_mode == InteractMode::Edit, job)
             .clicked()
         {
-            app.hex_ui.interact_mode = InteractMode::Edit;
+            app.hex.ui.interact_mode = InteractMode::Edit;
         }
         ui.separator();
         let data_len = app.data.len();
         if data_len != 0 {
-            if let Some(view_key) = app.hex_ui.focused_view {
-                let view = &app.meta_state.meta.views[view_key].view;
-                let per = match app.meta_state.meta.low.perspectives.get_mut(view.perspective) {
+            if let Some(view_key) = app.hex.ui.focused_view {
+                let view = &app.hex.meta_state.meta.views[view_key].view;
+                let per = match app.hex.meta_state.meta.low.perspectives.get_mut(view.perspective) {
                     Some(per) => per,
                     None => {
                         ui.label("Invalid perspective key");
@@ -39,10 +39,10 @@ pub fn ui(ui: &mut Ui, app: &mut App, mouse_pos: ViewportVec) {
                     }
                 };
                 ui.label("offset");
-                ui.add(DragValue::new(&mut app.meta_state.meta.low.regions[per.region].region.begin));
+                ui.add(DragValue::new(&mut app.hex.meta_state.meta.low.regions[per.region].region.begin));
                 ui.label("columns");
                 ui.add(DragValue::new(&mut per.cols));
-                let offsets = view.offsets(&app.meta_state.meta.low.perspectives, &app.meta_state.meta.low.regions);
+                let offsets = view.offsets(&app.hex.meta_state.meta.low.perspectives, &app.hex.meta_state.meta.low.regions);
                 #[expect(
                     clippy::cast_precision_loss,
                     reason = "Precision is good until 52 bits (more than reasonable)"
@@ -61,7 +61,7 @@ pub fn ui(ui: &mut Ui, app: &mut App, mouse_pos: ViewportVec) {
             "cursor: {} ({:x})",
             app.edit_state.cursor, app.edit_state.cursor
         ));
-        if !app.hex_ui.current_layout.is_null() && let Some((offset, _view_idx)) = app.byte_offset_at_pos(mouse_pos.x, mouse_pos.y) {
+        if !app.hex.ui.current_layout.is_null() && let Some((offset, _view_idx)) = app.byte_offset_at_pos(mouse_pos.x, mouse_pos.y) {
             ui.label(format!("mouse: {} ({:x})", offset, offset));
         }
     });

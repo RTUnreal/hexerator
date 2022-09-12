@@ -46,11 +46,11 @@ impl BookmarksWindow {
             })
             .body(|body| {
                 // Sort by offset
-                let mut keys: Vec<usize> = (0..app.meta_state.meta.bookmarks.len()).collect();
-                keys.sort_by_key(|&idx| app.meta_state.meta.bookmarks[idx].offset);
+                let mut keys: Vec<usize> = (0..app.hex.meta_state.meta.bookmarks.len()).collect();
+                keys.sort_by_key(|&idx| app.hex.meta_state.meta.bookmarks[idx].offset);
                 keys.retain(|&k| {
                     win.name_filter_string.is_empty()
-                        || app.meta_state.meta.bookmarks[k]
+                        || app.hex.meta_state.meta.bookmarks[k]
                             .label
                             .contains(&win.name_filter_string)
                 });
@@ -60,7 +60,7 @@ impl BookmarksWindow {
                         if ui
                             .selectable_label(
                                 win.selected == Some(idx),
-                                &app.meta_state.meta.bookmarks[idx].label,
+                                &app.hex.meta_state.meta.bookmarks[idx].label,
                             )
                             .clicked()
                         {
@@ -69,14 +69,14 @@ impl BookmarksWindow {
                     });
                     row.col(|ui| {
                         if ui
-                            .link(app.meta_state.meta.bookmarks[idx].offset.to_string())
+                            .link(app.hex.meta_state.meta.bookmarks[idx].offset.to_string())
                             .clicked()
                         {
-                            action = Action::Goto(app.meta_state.meta.bookmarks[idx].offset);
+                            action = Action::Goto(app.hex.meta_state.meta.bookmarks[idx].offset);
                         }
                     });
                     row.col(|ui| {
-                        let bm = &app.meta_state.meta.bookmarks[idx];
+                        let bm = &app.hex.meta_state.meta.bookmarks[idx];
                         match &bm.value_type {
                             ValueType::None => {}
                             ValueType::U8 => match app.data.get_mut(bm.offset) {
@@ -128,12 +128,12 @@ impl BookmarksWindow {
                         }
                     });
                     row.col(|ui| {
-                        let off = app.meta_state.meta.bookmarks[idx].offset;
+                        let off = app.hex.meta_state.meta.bookmarks[idx].offset;
                         if let Some(region_key) = find_most_specific_region_for_offset(
-                            &app.meta_state.meta.low.regions,
+                            &app.hex.meta_state.meta.low.regions,
                             off,
                         ) {
-                            let region = &app.meta_state.meta.low.regions[region_key];
+                            let region = &app.hex.meta_state.meta.low.regions[region_key];
                             let ctx_menu =
                                 |ui: &mut egui::Ui| region_context_menu!(ui, app, region, action);
                             if ui
@@ -153,7 +153,7 @@ impl BookmarksWindow {
             });
         if let Some(idx) = win.selected {
             ui.separator();
-            let mark = &mut app.meta_state.meta.bookmarks[idx];
+            let mark = &mut app.hex.meta_state.meta.bookmarks[idx];
             ui.horizontal(|ui| {
                 if win.edit_name {
                     if ui.text_edit_singleline(&mut mark.label).lost_focus() {
@@ -221,13 +221,13 @@ impl BookmarksWindow {
             ui.heading("Description");
             ui.text_edit_multiline(&mut mark.desc);
             if ui.button("Delete").clicked() {
-                app.meta_state.meta.bookmarks.remove(idx);
+                app.hex.meta_state.meta.bookmarks.remove(idx);
                 win.selected = None;
             }
         }
         ui.separator();
         if ui.button("Add new at cursor").clicked() {
-            app.meta_state.meta.bookmarks.push(Bookmark {
+            app.hex.meta_state.meta.bookmarks.push(Bookmark {
                 offset: app.edit_state.cursor,
                 label: format!("New bookmark at {}", app.edit_state.cursor),
                 desc: String::new(),
@@ -239,7 +239,7 @@ impl BookmarksWindow {
             Action::Goto(off) => {
                 app.edit_state.cursor = off;
                 app.center_view_on_offset(off);
-                app.hex_ui.flash_cursor();
+                app.hex.ui.flash_cursor();
             }
         }
     }
